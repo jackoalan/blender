@@ -523,28 +523,6 @@ float nlastrip_map_evaltime_cycle(NlaEvalStrip *nes, float evaltime, int cycle, 
 {
 	NlaStrip *strip = nes->strip;
 
-	/* in the quaternion interpolation use-case, it's useful to have
-	 * this user-time eval here. It could be spun off to an outer API instead */
-#if 0
-	float orig_eval = evaltime;
-	if ((strip->flag & NLASTRIP_FLAG_USR_TIME) != 0) {
-		/* calculate then execute each curve */
-		for (FCurve *fcu = strip->fcurves.first; fcu; fcu = fcu->next) {
-			/* check if this F-Curve doesn't belong to a muted group */
-			if ((fcu->grp == NULL) || (fcu->grp->flag & AGRP_MUTED) == 0) {
-				/* check if this curve should be skipped */
-				if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
-					if (!strcmp(fcu->rna_path, "strip_time")) {
-						evaltime = evaluate_fcurve(fcu, evaltime);
-						break;
-					}
-				}
-			}
-		}
-	}
-#endif
-	printf("UT: %f %f\n", evaltime, strip->strip_time);
-
 	/* Same steps as the NLATIME_CONVERT_MAP mode,
 	 * restoring the global time using the repeat cycle */
 	float scale = fabsf(strip->scale);

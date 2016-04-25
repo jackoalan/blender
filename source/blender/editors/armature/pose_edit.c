@@ -1152,7 +1152,9 @@ static int pose_flip_quats_exec(bContext *C, wmOperator *UNUSED(op))
 	CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones)
 	{
 		/* only if bone is using quaternion rotation */
-		if (pchan->rotmode == ROT_MODE_QUAT) {
+		if (pchan->rotmode == ROT_MODE_QUAT ||
+			pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+			pchan->rotmode == ROT_MODE_QUAT_SQUAD) {
 			/* quaternions have 720 degree range */
 			negate_v4(pchan->quat);
 

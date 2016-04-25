@@ -110,7 +110,9 @@ static void object_clear_rot(Object *ob)
 				if (IS_EQF(ob->drotAxis[0], ob->drotAxis[1]) && IS_EQF(ob->drotAxis[1], ob->drotAxis[2]))
 					ob->drotAxis[1] = 1.0f;
 			}
-			else if (ob->rotmode == ROT_MODE_QUAT) {
+			else if (ob->rotmode == ROT_MODE_QUAT ||
+					 ob->rotmode == ROT_MODE_QUAT_SLERP ||
+					 ob->rotmode == ROT_MODE_QUAT_SQUAD) {
 				if ((ob->protectflag & OB_LOCK_ROTW) == 0)
 					ob->quat[0] = ob->dquat[0] = 1.0f;
 				if ((ob->protectflag & OB_LOCK_ROTX) == 0)
@@ -137,7 +139,9 @@ static void object_clear_rot(Object *ob)
 			/* FIXME: deltas are not handled for these cases yet... */
 			float eul[3], oldeul[3], quat1[4] = {0};
 			
-			if (ob->rotmode == ROT_MODE_QUAT) {
+			if (ob->rotmode == ROT_MODE_QUAT ||
+				ob->rotmode == ROT_MODE_QUAT_SLERP ||
+				ob->rotmode == ROT_MODE_QUAT_SQUAD) {
 				copy_qt_qt(quat1, ob->quat);
 				quat_to_eul(oldeul, ob->quat);
 			}
@@ -157,7 +161,9 @@ static void object_clear_rot(Object *ob)
 			if (ob->protectflag & OB_LOCK_ROTZ)
 				eul[2] = oldeul[2];
 			
-			if (ob->rotmode == ROT_MODE_QUAT) {
+			if (ob->rotmode == ROT_MODE_QUAT ||
+				ob->rotmode == ROT_MODE_QUAT_SLERP ||
+				ob->rotmode == ROT_MODE_QUAT_SQUAD) {
 				eul_to_quat(ob->quat, eul);
 				/* quaternions flip w sign to accumulate rotations correctly */
 				if ((quat1[0] < 0.0f && ob->quat[0] > 0.0f) || (quat1[0] > 0.0f && ob->quat[0] < 0.0f)) {
@@ -173,7 +179,9 @@ static void object_clear_rot(Object *ob)
 		}
 	}                        // Duplicated in source/blender/editors/armature/editarmature.c
 	else {
-		if (ob->rotmode == ROT_MODE_QUAT) {
+		if (ob->rotmode == ROT_MODE_QUAT ||
+			ob->rotmode == ROT_MODE_QUAT_SLERP ||
+			ob->rotmode == ROT_MODE_QUAT_SQUAD) {
 			unit_qt(ob->quat);
 			unit_qt(ob->dquat);
 		}
@@ -441,14 +449,14 @@ static int apply_objects_internal(bContext *C, ReportList *reports, bool apply_l
 
 		/* calculate rotation/scale matrix */
 		if (apply_scale && apply_rot)
-			BKE_object_to_mat3(ob, rsmat);
+			BKE_object_to_mat3(scene, ob, rsmat);
 		else if (apply_scale)
 			BKE_object_scale_to_mat3(ob, rsmat);
 		else if (apply_rot) {
 			float tmat[3][3], timat[3][3];
 
 			/* simple rotation matrix */
-			BKE_object_rot_to_mat3(ob, rsmat, true);
+			BKE_object_rot_to_mat3(scene, ob, rsmat, true);
 
 			/* correct for scale, note mul_m3_m3m3 has swapped args! */
 			BKE_object_scale_to_mat3(ob, tmat);
@@ -468,7 +476,7 @@ static int apply_objects_internal(bContext *C, ReportList *reports, bool apply_l
 			if (!(apply_scale && apply_rot)) {
 				float tmat[3][3];
 				/* correct for scale and rotation that is still applied */
-				BKE_object_to_mat3(ob, obmat);
+				BKE_object_to_mat3(scene, ob, obmat);
 				invert_m3_m3(iobmat, obmat);
 				mul_m3_m3m3(tmat, rsmat, iobmat);
 				mul_m3_v3(tmat, mat[3]);
@@ -963,7 +971,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 				 * note: the functions above must set 'cent' */
 
 				/* convert the offset to parent space */
-				BKE_object_to_mat4(ob, obmat);
+				BKE_object_to_mat4(scene, ob, obmat);
 				mul_v3_mat3_m4v3(centn, obmat, cent); /* omit translation part */
 
 				add_v3_v3(ob->loc, centn);

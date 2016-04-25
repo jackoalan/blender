@@ -431,6 +431,30 @@ float normalize_qt_qt(float r[4], const float q[4])
 	return normalize_qt(r);
 }
 
+void exp_qt_qt(float q1[4], const float q2[4])
+{
+	float a = len_v3(&q2[1]);
+
+	q1[0] = cosf(a);
+	if (a > 0)
+		mul_v3_v3fl(&q1[1], &q2[1], sinf(a) / a);
+	else
+		zero_v3(&q1[1]);
+}
+
+/* natural log */
+void log_qt_qt(float q1[4], const float q2[4])
+{
+	float a = acosf(q2[0]);
+	float sa = sinf(a);
+
+	q1[0] = 0.f;
+	if (sa > 0)
+		mul_v3_v3fl(&q1[1], &q2[1], a / sa);
+	else
+		zero_v3(&q1[1]);
+}
+
 /**
  * Calculate a rotation matrix from 2 normalized vectors.
  */
@@ -744,6 +768,89 @@ void interp_qt_qtqt(float result[4], const float quat1[4], const float quat2[4],
 	result[1] = w[0] * quat[1] + w[1] * quat2[1];
 	result[2] = w[0] * quat[2] + w[1] * quat2[2];
 	result[3] = w[0] * quat[3] + w[1] * quat2[3];
+}
+
+void interp_qt_qtqt_no_invert(float result[4], const float quat1[4], const float quat2[4], const float t)
+{
+	float cosom, w[2];
+
+	BLI_ASSERT_UNIT_QUAT(quat1);
+	BLI_ASSERT_UNIT_QUAT(quat2);
+
+	cosom = dot_qtqt(quat1, quat2);
+
+	interp_dot_slerp(t, cosom, w);
+
+	result[0] = w[0] * quat1[0] + w[1] * quat2[0];
+	result[1] = w[0] * quat1[1] + w[1] * quat2[1];
+	result[2] = w[0] * quat1[2] + w[1] * quat2[2];
+	result[3] = w[0] * quat1[3] + w[1] * quat2[3];
+}
+
+static void calc_quadrangle(float q[4], const float a[4], const float b[4], const float c[4])
+{
+	float qInvB[4];
+	invert_qt_qt(qInvB, b);
+
+	float q1[4];
+	float q1Log[4];
+	mul_qt_qtqt(q1, qInvB, c);
+	log_qt_qt(q1Log, q1);
+
+	float q2[4];
+	float q2Log[4];
+	mul_qt_qtqt(q2, qInvB, a);
+	log_qt_qt(q2Log, q2);
+
+	float q3[4];
+	add_v4_v4v4(q3, q1Log, q2Log);
+	mul_v4_fl(q3, -1.f / 4.f);
+
+	float q3Exp[4];
+	exp_qt_qt(q3Exp, q3);
+
+	mul_qt_qtqt(q, b, q3Exp);
+}
+
+/* SQUAD - spherical/quadrangle interpolation of five sequential quaternions
+ * Interpolation occurs between quat2 and quat3.
+ */
+void interp_qt_qtqtqtqt(float result[4], const float quat1[4], const float quat2[4],
+						const float quat3[4], const float quat4[4], const float t)
+{
+	const float* quats_in[4] = {quat1, quat2, quat3, quat4};
+	float quats_shortened[3][4], cosom;
+
+	BLI_ASSERT_UNIT_QUAT(quat1);
+	BLI_ASSERT_UNIT_QUAT(quat2);
+	BLI_ASSERT_UNIT_QUAT(quat3);
+	BLI_ASSERT_UNIT_QUAT(quat4);
+
+	/* negate all 'long' quaternion interpolations */
+	for (int i = 0; i < 3; ++i) {
+		cosom = dot_qtqt(quats_in[i], quats_in[i + 1]);
+
+		/* rotate around shortest angle */
+		if (cosom < 0.0f)
+			negate_v4_v4(quats_shortened[i], quats_in[i]);
+		else
+			copy_qt_qt(quats_shortened[i], quats_in[i]);
+	}
+
+	float q1[4];
+	calc_quadrangle(q1, quats_shortened[0], quats_shortened[1], quats_shortened[2]);
+
+	float q2[4];
+	calc_quadrangle(q2, quats_shortened[1], quats_shortened[2], quats_in[3]);
+
+	float q3[4];
+	interp_qt_qtqt_no_invert(q3, quats_shortened[1], quats_shortened[2], t);
+
+	float q4[4];
+	interp_qt_qtqt_no_invert(q4, q1, q2, t);
+
+	interp_qt_qtqt_no_invert(result, q3, q4, 2.f * t * (1.f - t));
+	normalize_qt(result);
 }
 
 void add_qt_qtqt(float result[4], const float quat1[4], const float quat2[4], const float t)

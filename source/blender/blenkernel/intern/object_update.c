@@ -69,13 +69,13 @@
 static ThreadMutex material_lock = BLI_MUTEX_INITIALIZER;
 
 void BKE_object_eval_local_transform(EvaluationContext *UNUSED(eval_ctx),
-                                     Scene *UNUSED(scene),
+									 Scene *scene,
                                      Object *ob)
 {
 	DEBUG_PRINT("%s on %s\n", __func__, ob->id.name);
 
 	/* calculate local matrix */
-	BKE_object_to_mat4(ob, ob->obmat);
+	BKE_object_to_mat4(scene, ob, ob->obmat);
 }
 
 /* Evaluate parent */

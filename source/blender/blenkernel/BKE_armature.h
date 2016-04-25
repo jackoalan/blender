@@ -118,8 +118,9 @@ void BKE_armature_mat_pose_to_bone_ex(struct Object *ob, struct bPoseChannel *pc
 
 void BKE_pchan_mat3_to_rot(struct bPoseChannel *pchan, float mat[3][3], bool use_compat);
 void BKE_pchan_apply_mat4(struct bPoseChannel *pchan, float mat[4][4], bool use_comat);
-void BKE_pchan_to_mat4(struct bPoseChannel *pchan, float chan_mat[4][4]);
-void BKE_pchan_calc_mat(struct bPoseChannel *pchan);
+/* `scene` added as time source for quaternion slerp/squad interpolation */
+void BKE_pchan_to_mat4(struct Scene* scene, struct Object *ob, struct bPoseChannel *pchan, float chan_mat[4][4]);
+void BKE_pchan_calc_mat(struct Scene* scene, struct Object *ob, struct bPoseChannel *pchan);
 
 /* Get the "pchan to pose" transform matrix. These matrices apply the effects of
  * HINGE/NO_SCALE/NO_LOCAL_LOCATION options over the pchan loc/rot/scale transformations. */

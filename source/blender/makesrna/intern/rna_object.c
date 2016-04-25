@@ -243,7 +243,7 @@ static void rna_Object_matrix_local_set(PointerRNA *ptr, const float values[16])
 static void rna_Object_matrix_basis_get(PointerRNA *ptr, float values[16])
 {
 	Object *ob = ptr->id.data;
-	BKE_object_to_mat4(ob, (float(*)[4])values);
+	BKE_object_to_mat4(NULL, ob, (float(*)[4])values);
 }
 
 static void rna_Object_matrix_basis_set(PointerRNA *ptr, const float values[16])
@@ -2198,6 +2198,11 @@ static void rna_def_object(BlenderRNA *brna)
 		{ROT_MODE_ZYX, "ZYX", 0, "ZYX Euler", "ZYX Rotation Order - prone to Gimbal Lock"},
 		{ROT_MODE_AXISANGLE, "AXIS_ANGLE", 0, "Axis Angle",
 		                     "Axis Angle (W+XYZ), defines a rotation around some axis defined by 3D-Vector"},
+		{ROT_MODE_QUAT_SLERP, "QUATERNION_SLERP", 0, "Quaternion SLERP",
+							  "Uses control keyframes to directly-interpolate between discrete rotational poses"},
+		{ROT_MODE_QUAT_SQUAD, "QUATERNION_SQUAD", 0, "Quaternion SQUAD",
+							  "Uses control keyframes to directly-interpolate between discrete rotational poses, "
+							  "smoothed using quadratic spline"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	

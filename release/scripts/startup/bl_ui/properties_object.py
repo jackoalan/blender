@@ -54,7 +54,7 @@ class OBJECT_PT_transform(ObjectButtonsPanel, Panel):
         row = layout.row()
 
         row.column().prop(ob, "location")
-        if ob.rotation_mode == 'QUATERNION':
+        if ob.rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
             row.column().prop(ob, "rotation_quaternion", text="Rotation")
         elif ob.rotation_mode == 'AXIS_ANGLE':
             #row.column().label(text="Rotation")
@@ -81,7 +81,7 @@ class OBJECT_PT_delta_transform(ObjectButtonsPanel, Panel):
         row = layout.row()
 
         row.column().prop(ob, "delta_location")
-        if ob.rotation_mode == 'QUATERNION':
+        if ob.rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
             row.column().prop(ob, "delta_rotation_quaternion", text="Rotation")
         elif ob.rotation_mode == 'AXIS_ANGLE':
             #row.column().label(text="Rotation")

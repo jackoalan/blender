@@ -102,6 +102,8 @@ SG_Controller *BL_CreateIPO(struct bAction *action, KX_GameObject* gameobj, KX_B
 		drotmode = "delta_rotation_axis_angle";
 		break;
 	case ROT_MODE_QUAT: /* XXX, this isn't working, currently only eulers are supported [#28853] */
+	case ROT_MODE_QUAT_SLERP:
+	case ROT_MODE_QUAT_SQUAD:
 		rotmode = "rotation_quaternion";
 		drotmode = "delta_rotation_quaternion";
 		break;

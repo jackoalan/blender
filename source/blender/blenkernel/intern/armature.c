@@ -1361,6 +1361,8 @@ void BKE_pchan_mat3_to_rot(bPoseChannel *pchan, float mat[3][3], bool use_compat
 
 	switch (pchan->rotmode) {
 		case ROT_MODE_QUAT:
+		case ROT_MODE_QUAT_SLERP:
+		case ROT_MODE_QUAT_SQUAD:
 			mat3_normalized_to_quat(pchan->quat, mat);
 			break;
 		case ROT_MODE_AXISANGLE:
@@ -1409,14 +1411,18 @@ void BKE_rotMode_change_values(float quat[4], float eul[3], float axis[3], float
 			/* axis-angle to euler */
 			axis_angle_to_eulO(eul, newMode, axis, *angle);
 		}
-		else if (oldMode == ROT_MODE_QUAT) {
+		else if (oldMode == ROT_MODE_QUAT ||
+				 oldMode == ROT_MODE_QUAT_SLERP ||
+				 oldMode == ROT_MODE_QUAT_SQUAD) {
 			/* quat to euler */
 			normalize_qt(quat);
 			quat_to_eulO(eul, newMode, quat);
 		}
 		/* else { no conversion needed } */
 	}
-	else if (newMode == ROT_MODE_QUAT) { /* to quat */
+	else if (newMode == ROT_MODE_QUAT ||
+			 newMode == ROT_MODE_QUAT_SLERP ||
+			 newMode == ROT_MODE_QUAT_SQUAD) { /* to quat */
 		if (oldMode == ROT_MODE_AXISANGLE) {
 			/* axis angle to quat */
 			axis_angle_to_quat(quat, axis, *angle);
@@ -1432,7 +1438,9 @@ void BKE_rotMode_change_values(float quat[4], float eul[3], float axis[3], float
 			/* euler to axis angle */
 			eulO_to_axis_angle(axis, angle, eul, oldMode);
 		}
-		else if (oldMode == ROT_MODE_QUAT) {
+		else if (oldMode == ROT_MODE_QUAT ||
+				 oldMode == ROT_MODE_QUAT_SLERP ||
+				 oldMode == ROT_MODE_QUAT_SQUAD) {
 			/* quat to axis angle */
 			normalize_qt(quat);
 			quat_to_axis_angle(axis, angle, quat);
@@ -1877,7 +1885,7 @@ void BKE_pose_rebuild(Object *ob, bArmature *arm)
 /* ********************** THE POSE SOLVER ******************* */
 
 /* loc/rot/size to given mat4 */
-void BKE_pchan_to_mat4(bPoseChannel *pchan, float chan_mat[4][4])
+void BKE_pchan_to_mat4(struct Scene* scene, Object *ob, bPoseChannel *pchan, float chan_mat[4][4])
 {
 	float smat[3][3];
 	float rmat[3][3];
@@ -1895,7 +1903,7 @@ void BKE_pchan_to_mat4(bPoseChannel *pchan, float chan_mat[4][4])
 		/* axis-angle - not really that great for 3D-changing orientations */
 		axis_angle_to_mat3(rmat, pchan->rotAxis, pchan->rotAngle);
 	}
-	else {
+	else if (pchan->rotmode == ROT_MODE_QUAT) {
 		/* quats are normalized before use to eliminate scaling issues */
 		float quat[4];
 
@@ -1905,6 +1913,42 @@ void BKE_pchan_to_mat4(bPoseChannel *pchan, float chan_mat[4][4])
 		 */
 		normalize_qt_qt(quat, pchan->quat);
 		quat_to_mat3(rmat, quat);
+	}
+	else if (pchan->rotmode == ROT_MODE_QUAT_SLERP) {
+		/* slerp - direct spherical interpolation */
+		float quat[4];
+
+		if (scene && (ob->recalc & OB_RECALC_TIME)) {
+			/* scene-time-sensitive quaternion interpolation */
+			float ctime = BKE_scene_frame_get(scene);
+
+			BKE_animsys_interp_qt_slerp(quat, ob, pchan, ctime, false);
+			normalize_qt(quat);
+			quat_to_mat3(rmat, quat);
+
+		} else {
+			/* normal quaternion interpolation failsafe */
+			normalize_qt_qt(quat, pchan->quat);
+			quat_to_mat3(rmat, quat);
+		}
+	}
+	else if (pchan->rotmode == ROT_MODE_QUAT_SQUAD) {
+		/* squad - direct spherical-quadrangle interpolation */
+		float quat[4];
+
+		if (scene && (ob->recalc & OB_RECALC_TIME)) {
+			/* scene-time-sensitive quaternion interpolation */
+			float ctime = BKE_scene_frame_get(scene);
+
+			BKE_animsys_interp_qt_squad(quat, ob, pchan, ctime, false);
+			normalize_qt(quat);
+			quat_to_mat3(rmat, quat);
+
+		} else {
+			/* normal quaternion interpolation failsafe */
+			normalize_qt_qt(quat, pchan->quat);
+			quat_to_mat3(rmat, quat);
+		}
 	}
 
 	/* calculate matrix of bone (as 3x3 matrix, but then copy the 4x4) */
@@ -1920,12 +1964,12 @@ void BKE_pchan_to_mat4(bPoseChannel *pchan, float chan_mat[4][4])
 
 /* loc/rot/size to mat4 */
 /* used in constraint.c too */
-void BKE_pchan_calc_mat(bPoseChannel *pchan)
+void BKE_pchan_calc_mat(struct Scene* scene, Object *ob, bPoseChannel *pchan)
 {
 	/* this is just a wrapper around the copy of this function which calculates the matrix
 	 * and stores the result in any given channel
 	 */
-	BKE_pchan_to_mat4(pchan, pchan->chan_mat);
+	BKE_pchan_to_mat4(scene, ob, pchan, pchan->chan_mat);
 }
 
 #if 0 /* XXX OLD ANIMSYS, NLASTRIPS ARE NO LONGER USED */
@@ -2072,7 +2116,7 @@ void BKE_pose_where_is_bone(Scene *scene, Object *ob, bPoseChannel *pchan, float
 {
 	/* This gives a chan_mat with actions (ipos) results. */
 	if (do_extra)
-		BKE_pchan_calc_mat(pchan);
+		BKE_pchan_calc_mat(scene, ob, pchan);
 	else
 		unit_m4(pchan->chan_mat);
 

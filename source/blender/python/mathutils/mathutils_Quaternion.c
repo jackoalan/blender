@@ -323,6 +323,70 @@ static PyObject *Quaternion_slerp(QuaternionObject *self, PyObject *args)
 	return Quaternion_CreatePyObject(quat, Py_TYPE(self));
 }
 
+PyDoc_STRVAR(Quaternion_squad_doc,
+".. function:: squad(quat0, quat2, quat3, factor)\n"
+"\n"
+"   Returns the spherical-quadrangle interpolation of four quaternions.\n"
+"\n"
+"   the bounds of interpolation occur between this quaternion and quat2,\n"
+"   using the additional surrounding quaternions to fit a rotational spline.\n"
+"\n"
+"   :arg quat0: previous quaternion to interpolate with.\n"
+"   :type quat0: :class:`Quaternion`\n"
+"   :arg quat2: next quaternion to interpolate with.\n"
+"   :type quat2: :class:`Quaternion`\n"
+"   :arg quat3: the next quaternion after to interpolate with.\n"
+"   :type quat3: :class:`Quaternion`\n"
+"   :arg factor: The interpolation value in [0.0, 1.0].\n"
+"   :type factor: float\n"
+"   :return: The interpolated rotation.\n"
+"   :rtype: :class:`Quaternion`\n"
+);
+static PyObject *Quaternion_squad(QuaternionObject *self, PyObject *args)
+{
+	PyObject *quat0, *quat2, *quat3;
+	float tquat0[QUAT_SIZE], tquat2[QUAT_SIZE], tquat3[QUAT_SIZE], quat[QUAT_SIZE], fac;
+
+	if (!PyArg_ParseTuple(args, "OOOf:squad", &quat0, &quat2, &quat3, &fac)) {
+		PyErr_SetString(PyExc_TypeError,
+						"quat.squad(): "
+						"expected 3 Quaternion types and float");
+		return NULL;
+	}
+
+	if (BaseMath_ReadCallback(self) == -1)
+		return NULL;
+
+	if (mathutils_array_parse(tquat0, QUAT_SIZE, QUAT_SIZE, quat0,
+							  "Quaternion.squad(other), invalid 'quat0' arg") == -1)
+	{
+		return NULL;
+	}
+
+	if (mathutils_array_parse(tquat2, QUAT_SIZE, QUAT_SIZE, quat2,
+							  "Quaternion.squad(other), invalid 'quat2' arg") == -1)
+	{
+		return NULL;
+	}
+
+	if (mathutils_array_parse(tquat3, QUAT_SIZE, QUAT_SIZE, quat3,
+							  "Quaternion.squad(other), invalid 'quat3' arg") == -1)
+	{
+		return NULL;
+	}
+
+	if (fac > 1.0f || fac < 0.0f) {
+		PyErr_SetString(PyExc_ValueError,
+						"quat.squad(): "
+						"interpolation factor must be between 0.0 and 1.0");
+		return NULL;
+	}
+
+	interp_qt_qtqtqtqt(quat, tquat0, self->quat, tquat2, tquat3, fac);
+
+	return Quaternion_CreatePyObject(quat, Py_TYPE(self));
+}
+
 PyDoc_STRVAR(Quaternion_rotate_doc,
 ".. method:: rotate(other)\n"
 "\n"
@@ -1215,6 +1279,7 @@ static struct PyMethodDef Quaternion_methods[] = {
 	{"dot", (PyCFunction) Quaternion_dot, METH_O, Quaternion_dot_doc},
 	{"rotation_difference", (PyCFunction) Quaternion_rotation_difference, METH_O, Quaternion_rotation_difference_doc},
 	{"slerp", (PyCFunction) Quaternion_slerp, METH_VARARGS, Quaternion_slerp_doc},
+	{"squad", (PyCFunction) Quaternion_squad, METH_VARARGS, Quaternion_squad_doc},
 	{"rotate", (PyCFunction) Quaternion_rotate, METH_O, Quaternion_rotate_doc},
 
 	/* base-math methods */

@@ -5317,7 +5317,7 @@ static void ObjectToTransData(TransInfo *t, TransData *td, Object *ob)
 		 * NOTE: some Constraints, and also Tracking should never get this
 		 *		done, as it doesn't work well.
 		 */
-		BKE_object_to_mat3(ob, obmtx);
+		BKE_object_to_mat3(t->scene, ob, obmtx);
 		copy_m3_m4(totmat, ob->obmat);
 		invert_m3_m3(obinv, totmat);
 		mul_m3_m3m3(td->smtx, obmtx, obinv);

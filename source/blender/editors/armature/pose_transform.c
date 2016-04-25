@@ -574,7 +574,9 @@ static void pchan_clear_rot(bPoseChannel *pchan)
 				if (IS_EQF(pchan->rotAxis[0], pchan->rotAxis[1]) && IS_EQF(pchan->rotAxis[1], pchan->rotAxis[2]))
 					pchan->rotAxis[1] = 1.0f;
 			}
-			else if (pchan->rotmode == ROT_MODE_QUAT) {
+			else if (pchan->rotmode == ROT_MODE_QUAT ||
+					 pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+					 pchan->rotmode == ROT_MODE_QUAT_SQUAD) {
 				if ((pchan->protectflag & OB_LOCK_ROTW) == 0)
 					pchan->quat[0] = 1.0f;
 				if ((pchan->protectflag & OB_LOCK_ROTX) == 0)
@@ -599,7 +601,9 @@ static void pchan_clear_rot(bPoseChannel *pchan)
 			float eul[3], oldeul[3], quat1[4] = {0};
 			float qlen = 0.0f;
 			
-			if (pchan->rotmode == ROT_MODE_QUAT) {
+			if (pchan->rotmode == ROT_MODE_QUAT ||
+				pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+				pchan->rotmode == ROT_MODE_QUAT_SQUAD) {
 				qlen = normalize_qt_qt(quat1, pchan->quat);
 				quat_to_eul(oldeul, quat1);
 			}
@@ -619,7 +623,9 @@ static void pchan_clear_rot(bPoseChannel *pchan)
 			if (pchan->protectflag & OB_LOCK_ROTZ)
 				eul[2] = oldeul[2];
 			
-			if (pchan->rotmode == ROT_MODE_QUAT) {
+			if (pchan->rotmode == ROT_MODE_QUAT ||
+				pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+				pchan->rotmode == ROT_MODE_QUAT_SQUAD) {
 				eul_to_quat(pchan->quat, eul);
 				
 				/* restore original quat size */
@@ -639,7 +645,9 @@ static void pchan_clear_rot(bPoseChannel *pchan)
 		}
 	}       /* Duplicated in source/blender/editors/object/object_transform.c */
 	else {
-		if (pchan->rotmode == ROT_MODE_QUAT) {
+		if (pchan->rotmode == ROT_MODE_QUAT ||
+			pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+			pchan->rotmode == ROT_MODE_QUAT_SQUAD) {
 			unit_qt(pchan->quat);
 		}
 		else if (pchan->rotmode == ROT_MODE_AXISANGLE) {

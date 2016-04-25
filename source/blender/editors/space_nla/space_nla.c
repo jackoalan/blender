@@ -34,6 +34,9 @@
 
 #include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_object_types.h"
+
+#include "RNA_access.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -44,6 +47,7 @@
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_screen.h"
+#include "BKE_depsgraph.h"
 
 #include "ED_space_api.h"
 #include "ED_anim_api.h"
@@ -471,6 +475,23 @@ static void nla_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 	switch (wmn->category) {
 		case NC_ANIMATION:
 			// TODO: filter specific types of changes?
+			switch (wmn->data) {
+				case ND_NLA:
+					/* added for quaternion interpolation - ensures changes via the NLA update AnimData */
+					if (wmn->reference) {
+						PointerRNA id_ptr;
+						RNA_id_pointer_create(wmn->reference, &id_ptr);
+						if (RNA_struct_is_a(id_ptr.type, &RNA_Object)) {
+							struct Object *ob = id_ptr.data;
+							if (ob->adt) {
+								ob->adt->recalc |= ADT_RECALC_ANIM;
+								DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+							}
+						}
+					}
+				default:
+					break;
+			}
 			ED_area_tag_refresh(sa);
 			break;
 		case NC_SCENE:

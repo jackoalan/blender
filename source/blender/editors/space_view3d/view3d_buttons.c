@@ -952,6 +952,8 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
 
 	switch (RNA_enum_get(ptr, "rotation_mode")) {
 		case ROT_MODE_QUAT: /* quaternion */
+		case ROT_MODE_QUAT_SLERP:
+		case ROT_MODE_QUAT_SQUAD:
 			colsub = uiLayoutColumn(split, true);
 			uiItemR(colsub, ptr, "rotation_quaternion", 0, IFACE_("Rotation"), ICON_NONE);
 			colsub = uiLayoutColumn(split, true);

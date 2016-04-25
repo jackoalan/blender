@@ -59,6 +59,11 @@ EnumPropertyItem rna_enum_posebone_rotmode_items[] = {
 	{ROT_MODE_ZYX, "ZYX", 0, "ZYX Euler", "ZYX Rotation Order (prone to Gimbal Lock)"},
 	{ROT_MODE_AXISANGLE, "AXIS_ANGLE", 0, "Axis Angle",
 	                     "Axis Angle (W+XYZ), defines a rotation around some axis defined by 3D-Vector"},
+	{ROT_MODE_QUAT_SLERP, "QUATERNION_SLERP", 0, "Quaternion SLERP",
+						  "Uses control keyframes to directly-interpolate between discrete rotational poses"},
+	{ROT_MODE_QUAT_SQUAD, "QUATERNION_SQUAD", 0, "Quaternion SQUAD",
+						  "Uses control keyframes to directly-interpolate between discrete rotational poses, "
+						  "smoothed using quadratic spline"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -645,7 +650,8 @@ static int rna_PoseBones_lookup_string(PointerRNA *ptr, const char *key, Pointer
 static void rna_PoseChannel_matrix_basis_get(PointerRNA *ptr, float *values)
 {
 	bPoseChannel *pchan = (bPoseChannel *)ptr->data;
-	BKE_pchan_to_mat4(pchan, (float (*)[4])values);
+	Object *ob = (Object *)ptr->id.data;
+	BKE_pchan_to_mat4(NULL, ob, pchan, (float (*)[4])values);
 }
 
 static void rna_PoseChannel_matrix_basis_set(PointerRNA *ptr, const float *values)

@@ -4940,6 +4940,8 @@ static void direct_link_pose(FileData *fd, bPose *pose)
 		
 		/* in case this value changes in future, clamp else we get undefined behavior */
 		CLAMP(pchan->rotmode, ROT_MODE_MIN, ROT_MODE_MAX);
+
+		pchan->quat_cache = NULL;
 	}
 	pose->ikdata = NULL;
 	if (pose->ikparam != NULL) {
@@ -5464,6 +5466,9 @@ static void direct_link_object(FileData *fd, Object *ob)
 
 	/* Runtime curve data  */
 	ob->curve_cache = NULL;
+
+	/* Runtime quaternion interpolation data */
+	ob->quat_cache = NULL;
 
 	/* in case this value changes in future, clamp else we get undefined behavior */
 	CLAMP(ob->rotmode, ROT_MODE_MIN, ROT_MODE_MAX);

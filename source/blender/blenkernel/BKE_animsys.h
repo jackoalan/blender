@@ -32,6 +32,7 @@
  */
 
 struct ID;
+struct Object;
 struct ListBase;
 struct Main;
 struct AnimData;
@@ -45,6 +46,8 @@ struct ReportList;
 struct bAction;
 struct bActionGroup;
 struct AnimMapper;
+struct bPoseChannel;
+struct QuaternionInterpCache;
 
 /* ************************************* */
 /* AnimData API */
@@ -192,6 +195,22 @@ void animsys_evaluate_action(struct PointerRNA *ptr, struct bAction *act, struct
 
 /* Evaluate Action Group */
 void animsys_evaluate_action_group(struct PointerRNA *ptr, struct bAction *act, struct bActionGroup *agrp, struct AnimMapper *remap, float ctime);
+
+/* ************************************* */
+
+/* ------------ Quaternion Interpolation API --------------- */
+/* Quaternion SLERP and SQUAD rotation modes primarily rely on keyframed time-points
+ * defined in AnimData to control the interpolation points.
+ */
+
+/* Initialize cache as invalid */
+void BKE_animsys_invalidate_quat_interp_cache(struct QuaternionInterpCache *quat_cache);
+
+/* Performs spherical-linear interpolation using Object/PoseChannel AnimData at specified time */
+void BKE_animsys_interp_qt_slerp(float quat_out[4], struct Object *ob, struct bPoseChannel *pchan, float ctime, bool delta_quat);
+
+/* Performs spherical-quadrangle interpolation using Object/PoseChannel AnimData at specified time */
+void BKE_animsys_interp_qt_squad(float quat_out[4], struct Object *ob, struct bPoseChannel *pchan, float ctime, bool delta_quat);
 
 /* ************************************* */
 

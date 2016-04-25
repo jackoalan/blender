@@ -192,7 +192,8 @@ static void axis_angle_to_gimbal_axis(float gmat[3][3], const float axis[3], con
 
 static int test_rotmode_euler(short rotmode)
 {
-	return (ELEM(rotmode, ROT_MODE_AXISANGLE, ROT_MODE_QUAT)) ? 0 : 1;
+	return (ELEM(rotmode, ROT_MODE_AXISANGLE, ROT_MODE_QUAT,
+						  ROT_MODE_QUAT_SLERP, ROT_MODE_QUAT_SQUAD)) ? 0 : 1;
 }
 
 bool gimbal_axis(Object *ob, float gmat[3][3])

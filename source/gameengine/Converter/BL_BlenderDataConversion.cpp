@@ -1788,7 +1788,7 @@ static void bl_ConvertBlenderObject_Single(
 
 	MT_Matrix3x3 rotation;
 	float rotmat[3][3];
-	BKE_object_rot_to_mat3(blenderobject, rotmat, false);
+	BKE_object_rot_to_mat3(kxscene->GetBlenderScene(), blenderobject, rotmat, false);
 	rotation.setValue3x3((float*)rotmat);
 
 	MT_Vector3 scale(blenderobject->size);

@@ -47,6 +47,8 @@ struct bContext;
 struct AnimData;
 struct bAction;
 struct BezTriple;
+struct NlaStrip;
+struct NlaEvalStrip;
 struct StructRNA;
 struct PointerRNA;
 struct PropertyRNA;
@@ -280,6 +282,12 @@ void correct_bezpart(float v1[2], float v2[2], float v3[2], float v4[2]);
 float evaluate_fcurve(struct FCurve *fcu, float evaltime);
 /* evaluate fcurve and store value */
 void calculate_fcurve(struct FCurve *fcu, float ctime);
+
+/* -------- Interpolation Time-points --------  */
+
+/* find 4 interpolation time-points surrounding given time */
+void find_fcurve_interp_qt_times(float interp[4], struct FCurve *fcu, float evaltime,
+								 int evalcycle, struct NlaEvalStrip *nes);
 
 /* ************* F-Curve Samples API ******************** */
 

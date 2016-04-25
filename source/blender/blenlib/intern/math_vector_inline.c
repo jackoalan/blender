@@ -852,6 +852,11 @@ MINLINE float len_v3v3(const float a[3], const float b[3])
 	return len_v3(d);
 }
 
+MINLINE float len_v4(const float a[4])
+{
+	return sqrtf(dot_v4v4(a, a));
+}
+
 MINLINE float normalize_v2_v2(float r[2], const float a[2])
 {
 	float d = dot_v2v2(a, a);

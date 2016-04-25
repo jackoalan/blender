@@ -45,7 +45,10 @@ typedef struct NlaEvalStrip {
 	short track_index;          /* the index of the track within the list */
 	short strip_mode;           /* which end of the strip are we looking at */
 	
+	float prev_strip_ctime;		/* previous global time present in NlaStrip before this NlaEvalStrip was generated */
+	float strip_ctime;			/* global time used to generate this NlaEvalStrip */
 	float strip_time;           /* time at which which strip is being evaluated */
+	int strip_cycle;            /* repeat cycle based on global time (to map back to global) */
 } NlaEvalStrip;
 
 /* NlaEvalStrip->strip_mode */
@@ -54,7 +57,7 @@ enum eNlaEvalStrip_StripMode {
 	NES_TIME_BEFORE = -1,
 	NES_TIME_WITHIN,
 	NES_TIME_AFTER,
-	
+
 	/* transition-strip evaluations */
 	NES_TIME_TRANSITION_START,
 	NES_TIME_TRANSITION_END,
@@ -77,11 +80,12 @@ typedef struct NlaEvalChannel {
 
 /* convert from strip time <-> global time */
 float nlastrip_get_frame(NlaStrip *strip, float cframe, short mode);
+float nlastrip_map_evaltime_cycle(NlaEvalStrip *nes, float evaltime, int cycle, bool *inside_strip);
 
 /* --------------- NLA Evaluation (very-private stuff) ----------------------- */
 /* these functions are only defined here to avoid problems with the order in which they get defined... */
 
-NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list, ListBase *strips, short index, float ctime);
+NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list, ListBase *strips, short index, float ctime, bool no_usr_time);
 void nlastrip_evaluate(PointerRNA *ptr, ListBase *channels, ListBase *modifiers, NlaEvalStrip *nes);
 void nladata_flush_channels(ListBase *channels);
 

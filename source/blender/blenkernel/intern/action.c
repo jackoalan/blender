@@ -794,6 +794,9 @@ void BKE_pose_channel_free_ex(bPoseChannel *pchan, bool do_id_user)
 		IDP_FreeProperty(pchan->prop);
 		MEM_freeN(pchan->prop);
 	}
+
+	if (pchan->quat_cache)
+		MEM_freeN(pchan->quat_cache);
 }
 
 void BKE_pose_channel_free(bPoseChannel *pchan)
@@ -1205,8 +1208,6 @@ short action_get_item_transforms(bAction *act, Object *ob, bPoseChannel *pchan, 
 		
 	/* get the basic path to the properties of interest */
 	basePath = RNA_path_from_ID_to_struct(&ptr);
-	if (basePath == NULL)
-		return 0;
 		
 	/* search F-Curves for the given properties 
 	 *	- we cannot use the groups, since they may not be grouped in that way...
@@ -1223,13 +1224,17 @@ short action_get_item_transforms(bAction *act, Object *ob, bPoseChannel *pchan, 
 			continue;
 		
 		/* step 1: check for matching base path */
-		bPtr = strstr(fcu->rna_path, basePath);
-		
+		if (basePath)
+			bPtr = strstr(fcu->rna_path, basePath);
+		else
+			bPtr = fcu->rna_path;
+
 		if (bPtr) {
 			/* we must add len(basePath) bytes to the match so that we are at the end of the 
 			 * base path so that we don't get false positives with these strings in the names
 			 */
-			bPtr += strlen(basePath);
+			if (basePath)
+				bPtr += strlen(basePath);
 			
 			/* step 2: check for some property with transforms 
 			 *	- to speed things up, only check for the ones not yet found 
@@ -1286,8 +1291,119 @@ short action_get_item_transforms(bAction *act, Object *ob, bPoseChannel *pchan, 
 	}
 	
 	/* free basePath */
-	MEM_freeN(basePath);
+	if (basePath)
+		MEM_freeN(basePath);
 	
+	/* return flags found */
+	return flags;
+}
+
+/* Same as action_get_item_transforms, except returned curves list is filtered with transform flags
+ *	- if 'curves' is provided, a list of links to these curves are also returned
+ */
+short action_get_item_transforms_filtered(bAction *act, Object *ob, bPoseChannel *pchan, ListBase *curves, short filter)
+{
+	PointerRNA ptr;
+	FCurve *fcu;
+	char *basePath = NULL;
+	short flags = 0;
+
+	/* build PointerRNA from provided data to obtain the paths to use */
+	if (pchan)
+		RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+	else if (ob)
+		RNA_id_pointer_create((ID *)ob, &ptr);
+	else
+		return 0;
+
+	/* get the basic path to the properties of interest */
+	basePath = RNA_path_from_ID_to_struct(&ptr);
+
+	/* search F-Curves for the given properties
+	 *	- we cannot use the groups, since they may not be grouped in that way...
+	 */
+	for (fcu = act->curves.first; fcu; fcu = fcu->next) {
+		const char *bPtr = NULL, *pPtr = NULL;
+
+		/* if enough flags have been found, we can stop checking unless we're also getting the curves */
+		if ((flags == ACT_TRANS_ALL) && (curves == NULL))
+			break;
+
+		/* just in case... */
+		if (fcu->rna_path == NULL)
+			continue;
+
+		/* step 1: check for matching base path */
+		if (basePath)
+			bPtr = strstr(fcu->rna_path, basePath);
+		else
+			bPtr = fcu->rna_path;
+
+		if (bPtr) {
+			/* we must add len(basePath) bytes to the match so that we are at the end of the
+			 * base path so that we don't get false positives with these strings in the names
+			 */
+			if (basePath)
+				bPtr += strlen(basePath);
+
+			/* step 2: check for some property with transforms
+			 *	- to speed things up, only check for the ones not yet found
+			 *    unless we're getting the curves too
+			 *	- if we're getting the curves, the BLI_genericNodeN() creates a LinkData
+			 *	  node wrapping the F-Curve, which then gets added to the list
+			 *	- once a match has been found, the curve cannot possibly be any other one
+			 */
+			if ((curves) || (flags & ACT_TRANS_LOC) == 0) {
+				pPtr = strstr(bPtr, "location");
+				if (pPtr) {
+					flags |= ACT_TRANS_LOC;
+
+					if (curves && (filter & ACT_TRANS_LOC) != 0)
+						BLI_addtail(curves, BLI_genericNodeN(fcu));
+					continue;
+				}
+			}
+
+			if ((curves) || (flags & ACT_TRANS_SCALE) == 0) {
+				pPtr = strstr(bPtr, "scale");
+				if (pPtr) {
+					flags |= ACT_TRANS_SCALE;
+
+					if (curves && (filter & ACT_TRANS_SCALE) != 0)
+						BLI_addtail(curves, BLI_genericNodeN(fcu));
+					continue;
+				}
+			}
+
+			if ((curves) || (flags & ACT_TRANS_ROT) == 0) {
+				pPtr = strstr(bPtr, "rotation");
+				if (pPtr) {
+					flags |= ACT_TRANS_ROT;
+
+					if (curves && (filter & ACT_TRANS_ROT) != 0)
+						BLI_addtail(curves, BLI_genericNodeN(fcu));
+					continue;
+				}
+			}
+
+			if ((curves) || (flags & ACT_TRANS_PROP) == 0) {
+				/* custom properties only */
+				pPtr = strstr(bPtr, "[\""); /* extra '"' comment here to keep my texteditor functionlist working :) */
+				if (pPtr) {
+					flags |= ACT_TRANS_PROP;
+
+					if (curves && (filter & ACT_TRANS_PROP) != 0)
+						BLI_addtail(curves, BLI_genericNodeN(fcu));
+					continue;
+				}
+			}
+		}
+	}
+
+	/* free basePath */
+	if (basePath)
+		MEM_freeN(basePath);
+
 	/* return flags found */
 	return flags;
 }

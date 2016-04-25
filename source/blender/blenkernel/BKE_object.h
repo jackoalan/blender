@@ -116,10 +116,11 @@ bool BKE_object_obdata_is_libdata(struct Object *ob);
 void BKE_object_obdata_size_init(struct Object *ob, const float scale);
 
 void BKE_object_scale_to_mat3(struct Object *ob, float mat[3][3]);
-void BKE_object_rot_to_mat3(struct Object *ob, float mat[3][3], bool use_drot);
+/* `scene` added as time source for slerp/squad quaternion interpolation (set to NULL for old behavior) */
+void BKE_object_rot_to_mat3(struct Scene *scene, struct Object *ob, float mat[3][3], bool use_drot);
 void BKE_object_mat3_to_rot(struct Object *ob, float mat[3][3], bool use_compat);
-void BKE_object_to_mat3(struct Object *ob, float mat[3][3]);
-void BKE_object_to_mat4(struct Object *ob, float mat[4][4]);
+void BKE_object_to_mat3(struct Scene *scene, struct Object *ob, float mat[3][3]);
+void BKE_object_to_mat4(struct Scene *scene, struct Object *ob, float mat[4][4]);
 void BKE_object_apply_mat4(struct Object *ob, float mat[4][4], const bool use_compat, const bool use_parent);
 void BKE_object_matrix_local_get(struct Object *ob, float mat[4][4]);
 

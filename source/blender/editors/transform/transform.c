@@ -2646,7 +2646,9 @@ static void constraintob_from_transdata(bConstraintOb *cob, TransData *td)
 	 */
 	memset(cob, 0, sizeof(bConstraintOb));
 	if (td->ext) {
-		if (td->ext->rotOrder == ROT_MODE_QUAT) {
+		if (td->ext->rotOrder == ROT_MODE_QUAT ||
+			td->ext->rotOrder == ROT_MODE_QUAT_SLERP ||
+			td->ext->rotOrder == ROT_MODE_QUAT_SQUAD) {
 			/* quats */
 			/* objects and bones do normalization first too, otherwise
 			 * we don't necessarily end up with a rotation matrix, and
@@ -2717,7 +2719,9 @@ static void constraintRotLim(TransInfo *UNUSED(t), TransData *td)
 		
 		if (do_limit) {
 			/* copy results from cob->matrix */
-			if (td->ext->rotOrder == ROT_MODE_QUAT) {
+			if (td->ext->rotOrder == ROT_MODE_QUAT ||
+				td->ext->rotOrder == ROT_MODE_QUAT_SLERP ||
+				td->ext->rotOrder == ROT_MODE_QUAT_SQUAD) {
 				/* quats */
 				mat4_to_quat(td->ext->quat, cob.matrix);
 			}
@@ -3810,7 +3814,9 @@ static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short 
 		 * So no other way than storing it in some dedicated members of td->ext! */
 		if ((t->flag & T_V3D_ALIGN) == 0) { /* align mode doesn't rotate objects itself */
 			/* euler or quaternion/axis-angle? */
-			if (td->ext->rotOrder == ROT_MODE_QUAT) {
+			if (td->ext->rotOrder == ROT_MODE_QUAT ||
+				td->ext->rotOrder == ROT_MODE_QUAT_SLERP ||
+				td->ext->rotOrder == ROT_MODE_QUAT_SQUAD) {
 				mul_m3_series(fmat, td->ext->r_smtx, mat, td->ext->r_mtx);
 				
 				mat3_to_quat(quat, fmat); /* Actual transform */
@@ -3880,7 +3886,9 @@ static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short 
 		/* rotation */
 		if ((t->flag & T_V3D_ALIGN) == 0) { // align mode doesn't rotate objects itself
 			/* euler or quaternion? */
-			if ((td->ext->rotOrder == ROT_MODE_QUAT) || (td->flag & TD_USEQUAT)) {
+			if ((td->ext->rotOrder == ROT_MODE_QUAT ||
+				 td->ext->rotOrder == ROT_MODE_QUAT_SLERP ||
+				 td->ext->rotOrder == ROT_MODE_QUAT_SQUAD) || (td->flag & TD_USEQUAT)) {
 				/* can be called for texture space translate for example, then opt out */
 				if (td->ext->quat) {
 					mul_m3_series(fmat, td->smtx, mat, td->mtx);

@@ -45,6 +45,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
+#include "DNA_object_types.h"
 #include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 
@@ -54,10 +55,13 @@
 
 #include "BLT_translation.h"
 
+#include "BKE_action.h"
+#include "BKE_animsys.h"
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_nla.h"
+#include "BKE_scene.h"
 #include "BKE_context.h"
 #include "BKE_report.h"
 
@@ -1438,6 +1442,301 @@ void GRAPH_OT_sample(wmOperatorType *ot)
 	ot->exec = graphkeys_sample_exec;
 	ot->poll = graphop_editable_keyframes_poll;
 	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+
+/* ******************** Sample Quaternions Operator *********************** */
+/* This operator 'bakes' the values of the curve into new keyframes between pairs
+ * of selected keyframes. It applies the same SQUAD/SLERP interpolation to the
+ * curves themselves.
+ */
+
+/* discovers up to 4 quaternion channels and samples frames in selection */
+static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *ale, char *rna_path)
+{
+	bAnimListElem *setale;
+
+	/* find fcurves from all related quaternion curves */
+	FCurve *found_curves[4] = {0};
+	char found_bits = 0;
+	float starttime = FLT_MAX;
+	float endtime = -FLT_MAX;
+
+	for (setale = ale; setale; setale = setale->next) {
+		FCurve *setfcu = setale->key_data;
+
+		/* Check if not already processed and valid */
+		if (setale->tag || setfcu->bezt == NULL || ((unsigned)setfcu->array_index) > 3u)
+			continue;
+
+		/* iteratively narrow down interp times */
+		if (!strcmp(rna_path, setfcu->rna_path)) {
+			setale->tag = 1;
+			found_curves[setfcu->array_index] = setfcu;
+			found_bits = 1 << setfcu->array_index;
+
+			/* expand working time range with selected BezTriples */
+			for (int b = 0; b < setfcu->totvert; ++b) {
+				BezTriple *bezt = &setfcu->bezt[b];
+				if (BEZT_ISSEL_ANY(bezt)) {
+					if (bezt->vec[1][0] < starttime)
+						starttime = bezt->vec[1][0];
+					if (bezt->vec[1][0] > endtime)
+						endtime = bezt->vec[1][0];
+				}
+			}
+
+			if (found_bits == 0xf)
+				break;
+		}
+	}
+
+	/* this test fails if there's no range to interpolate amongst curves */
+	if (starttime == FLT_MAX || endtime == -FLT_MAX)
+		return;
+
+	/* iterate each piecewise interpolation region */
+	for (float rt = starttime; rt < endtime;) {
+
+		float interp[4] = {-FLT_MAX, -FLT_MAX, FLT_MAX, FLT_MAX};
+		float quats[4][4] = {{0}};
+
+		/* locate nearest times in this interpolation region */
+		for (int c = 0; c <= 3; ++c) {
+			if (found_curves[c] == NULL)
+				continue;
+			find_fcurve_interp_qt_times(interp, found_curves[c], rt, 0, NULL);
+		}
+
+		/* ensure evaluation region is complete */
+		if (interp[1] == -FLT_MAX || interp[2] == FLT_MAX || interp[1] == interp[2]) {
+			if (interp[2] != FLT_MAX)
+				rt = nearbyintf(interp[2]) + 1.f;
+			continue;
+		}
+
+		/* evaluate interpolation points */
+		if (rotmode == ROT_MODE_QUAT_SLERP) {
+			for (int i = 1; i <= 2; ++i) {
+				for (int c = 0; c <= 3; ++c) {
+					if (found_curves[c] == NULL)
+						continue;
+					quats[i][c] = evaluate_fcurve(found_curves[c], interp[i]);
+				}
+			}
+		}
+		else if (rotmode == ROT_MODE_QUAT_SQUAD) {
+			if (interp[0] == -FLT_MAX)
+				interp[0] = interp[1];
+			if (interp[3] == FLT_MAX)
+				interp[3] = interp[2];
+			for (int i = 0; i <= 3; ++i) {
+				for (int c = 0; c <= 3; ++c) {
+					if (found_curves[c] == NULL)
+						continue;
+					quats[i][c] = evaluate_fcurve(found_curves[c], interp[i]);
+				}
+			}
+		}
+
+		/* interpolate */
+		for (float t = nearbyintf(interp[1]) + 1.f; t < interp[2]; ++t) {
+			float tn = (t - interp[1]) / (interp[2] - interp[1]);
+
+			float quat[4];
+			if (rotmode == ROT_MODE_QUAT_SLERP)
+				interp_qt_qtqt(quat, quats[1], quats[2], tn);
+			else if (rotmode == ROT_MODE_QUAT_SQUAD)
+				interp_qt_qtqtqtqt(quat, quats[0], quats[1], quats[2], quats[3], tn);
+
+			for (int c = 0; c <= 3; ++c) {
+				if (found_curves[c] == NULL)
+					continue;
+				insert_vert_fcurve(found_curves[c], t, quat[c],
+								   BEZT_KEYTYPE_BREAKDOWN, INSERTKEY_NEEDED);
+			}
+		}
+
+		/* next interpolation region */
+		rt = nearbyintf(interp[2]) + 1.f;
+	}
+
+	/* update graph */
+	for (int c = 0; c <= 3; ++c) {
+		if (found_curves[c] == NULL)
+			continue;
+		calchandles_fcurve(found_curves[c]);
+	}
+
+	ale->update |= ANIM_UPDATE_DEPS;
+}
+
+/* Evaluates the curves between each selected keyframe on each frame, and keys the value  */
+static void sample_graph_quats(bAnimContext *ac)
+{
+	ListBase anim_data = {NULL, NULL};
+	bAnimListElem *ale;
+	int filter;
+
+	/* filter data */
+	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
+	ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
+
+	/* loop through filtered data and add keys between selected keyframes on every frame  */
+	for (ale = anim_data.first; ale; ale = ale->next) {
+		FCurve *fcu = ale->key_data;
+
+		/* Check if not already processed and valid */
+		if (ale->tag || fcu->bezt == NULL || fcu->totvert == 0 ||
+			((unsigned)fcu->array_index) > 3u)
+			continue;
+
+		if (fcurve_is_keyframable(fcu)) {
+			/* only interested in rotations */
+			if (!strstr(fcu->rna_path, "rotation_quaternion"))
+				continue;
+
+			/* attempt resolving pose channel from path */
+			if (ac->obact->type == OB_ARMATURE) {
+				char *bone_name = BLI_str_quoted_substrN(fcu->rna_path, "pose.bones[");
+				if (bone_name) {
+					bPoseChannel *pchan = BKE_pose_channel_find_name(ac->obact->pose, bone_name);
+					MEM_freeN(bone_name);
+
+					/* check if pose channel is SQUAD/SLERP interpolation */
+					if (pchan &&
+						(pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+						 pchan->rotmode == ROT_MODE_QUAT_SQUAD))
+						sample_graph_quat_channels(pchan->rotmode, ale, fcu->rna_path);
+
+					/* nothing here, try next curve */
+					continue;
+				}
+			}
+
+			/* otherwise attempt matching to object properties */
+			if (ac->obact->rotmode == ROT_MODE_QUAT_SLERP ||
+				ac->obact->rotmode == ROT_MODE_QUAT_SQUAD)
+				sample_graph_quat_channels(ac->obact->rotmode, ale, fcu->rna_path);
+		}
+	}
+
+	ANIM_animdata_update(ac, &anim_data);
+	ANIM_animdata_freelist(&anim_data);
+}
+
+/* ------------------- */
+
+static int graphquats_sample_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	bAnimContext ac;
+
+	/* get editor data */
+	if (ANIM_animdata_get_context(C, &ac) == 0)
+		return OPERATOR_CANCELLED;
+
+	/* sample keyframes */
+	sample_graph_quats(&ac);
+
+	/* set notifier that keyframes have changed */
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+
+	return OPERATOR_FINISHED;
+}
+
+/* poll based on `graphop_editable_keyframes_poll` to check for interpolated quaterion channels */
+static int graphquats_sample_poll(bContext *C)
+{
+	bAnimContext ac;
+	bAnimListElem *ale;
+	ListBase anim_data = {NULL, NULL};
+	ScrArea *sa = CTX_wm_area(C);
+	size_t items;
+	int filter;
+	short found = 0;
+
+	/* firstly, check if in Graph Editor */
+	// TODO: also check for region?
+	if ((sa == NULL) || (sa->spacetype != SPACE_IPO))
+		return 0;
+
+	/* try to init Anim-Context stuff ourselves and check */
+	if (ANIM_animdata_get_context(C, &ac) == 0 || ac.obact->adt == NULL)
+		return 0;
+
+	/* loop over the editable F-Curves, and see if they're suitable
+	 * stopping on the first successful match
+	 */
+	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_CURVE_VISIBLE);
+	items = ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+	if (items == 0)
+		return 0;
+
+	for (ale = anim_data.first; ale; ale = ale->next) {
+		FCurve *fcu = (FCurve *)ale->data;
+
+		/* editable curves must fulfill the following criteria:
+		 *	- it has bezier keyframes
+		 *	- it must not be protected from editing (this is already checked for with the foredit flag
+		 *	- F-Curve modifiers do not interfere with the result too much
+		 *	  (i.e. the modifier-control drawing check returns false)
+		 *  - a rotation_quaternion channel influencing an Object or PoseBone with SLERP/SQUAD interpolation
+		 */
+		if (fcu->bezt == NULL)
+			continue;
+		if (fcurve_is_keyframable(fcu)) {
+			/* only interested in rotations */
+			if (!strstr(fcu->rna_path, "rotation_quaternion"))
+				continue;
+
+			/* attempt resolving pose channel from path */
+			if (ac.obact->type == OB_ARMATURE) {
+				char *bone_name = BLI_str_quoted_substrN(fcu->rna_path, "pose.bones[");
+				if (bone_name) {
+					bPoseChannel *pchan = BKE_pose_channel_find_name(ac.obact->pose, bone_name);
+					MEM_freeN(bone_name);
+
+					/* check if pose channel is SQUAD/SLERP interpolation */
+					if (pchan &&
+						(pchan->rotmode == ROT_MODE_QUAT_SLERP ||
+						 pchan->rotmode == ROT_MODE_QUAT_SQUAD)) {
+						found = 1;
+						break;
+					}
+
+					/* nothing here, try next curve */
+					continue;
+				}
+			}
+
+			/* otherwise attempt matching to object properties */
+			if (ac.obact->rotmode == ROT_MODE_QUAT_SLERP ||
+				ac.obact->rotmode == ROT_MODE_QUAT_SQUAD) {
+				found = 1;
+				break;
+			}
+		}
+	}
+
+	/* cleanup and return findings */
+	ANIM_animdata_freelist(&anim_data);
+	return found;
+}
+
+void GRAPH_OT_sample_quaternions(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Sample Quaternions";
+	ot->idname = "GRAPH_OT_sample_quaternions";
+	ot->description = "Add keyframes on every frame between the selected keyframes "
+					  "(SQUAD/SLERP quaternion channels only)";
+
+	/* api callbacks */
+	ot->exec = graphquats_sample_exec;
+	ot->poll = graphquats_sample_poll;
+
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

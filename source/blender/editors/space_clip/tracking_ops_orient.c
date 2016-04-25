@@ -289,7 +289,7 @@ static void set_axis(Scene *scene,
 	bool flip = false;
 	float mat[4][4], vec[3], obmat[4][4], dvec[3];
 
-	BKE_object_to_mat4(ob, obmat);
+	BKE_object_to_mat4(scene, ob, obmat);
 
 	BKE_tracking_get_camera_object_matrix(scene, camera, mat);
 	mul_v3_m4v3(vec, mat, track->bundle_pos);
@@ -375,7 +375,7 @@ static void set_axis(Scene *scene,
 		if (!flip) {
 			float lmat[4][4], ilmat[4][4], rmat[3][3];
 
-			BKE_object_rot_to_mat3(ob, rmat, true);
+			BKE_object_rot_to_mat3(scene, ob, rmat, true);
 			invert_m3(rmat);
 			mul_m4_m4m3(mat, mat, rmat);
 
@@ -474,7 +474,7 @@ static int set_plane_exec(bContext *C, wmOperator *op)
 	if (tracking_object->flag & TRACKING_OBJECT_CAMERA) {
 		invert_m4(mat);
 
-		BKE_object_to_mat4(object, obmat);
+		BKE_object_to_mat4(scene, object, obmat);
 		mul_m4_m4m4(mat, mat, obmat);
 		mul_m4_m4m4(newmat, rot, mat);
 		BKE_object_apply_mat4(object, newmat, 0, 0);

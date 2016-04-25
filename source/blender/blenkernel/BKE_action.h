@@ -96,6 +96,12 @@ typedef enum eAction_TransformFlags {
  */
 short action_get_item_transforms(struct bAction *act, struct Object *ob, struct bPoseChannel *pchan, ListBase *curves);
 
+/* Same as action_get_item_transforms, except returned curves list is filtered with transform flags
+ *	- if 'curves' is provided, a list of links to these curves are also returned
+ *	  whose nodes WILL NEED FREEING
+ */
+short action_get_item_transforms_filtered(struct bAction *act, struct Object *ob, struct bPoseChannel *pchan,
+									ListBase *curves, short filter);
 
 /* Some kind of bounding box operation on the action */
 void calc_action_range(const struct bAction *act, float *start, float *end, short incl_modifiers);

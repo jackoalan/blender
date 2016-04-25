@@ -168,6 +168,9 @@ typedef struct Object {
 	                    /* note: this isn't assured to be valid as with 'obmat',
 	                     *       before using this value you should do...
 	                     *       invert_m4_m4(ob->imat, ob->obmat); */
+
+	/* stores 4 sequential quaternions to speed up SLERP/SQUAD animation playback, not stored in the file */
+	struct QuaternionInterpCache *quat_cache;
 	
 	/* Previously 'imat' was used at render time, but as other places use it too
 	 * the interactive ui of 2.5 creates problems. So now only 'imat_ren' should

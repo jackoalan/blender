@@ -227,7 +227,10 @@ typedef struct bPoseChannel {
 	float rotAxis[3], rotAngle;         /* axis-angle rotation */
 	short rotmode;                      /* eRotationModes - rotation representation to use */
 	short pad;
-	
+
+	/* stores 4 sequential quaternions to speed up SLERP/SQUAD animation playback, not stored in file */
+	struct QuaternionInterpCache *quat_cache;
+
 	float chan_mat[4][4];           /* matrix result of loc/quat/size, and where we put deform in, see next line */
 	float pose_mat[4][4];           /* constraints accumulate here. in the end, pose_mat = bone->arm_mat * chan_mat
 	                                 * this matrix is object space */
@@ -335,8 +338,12 @@ typedef enum eRotationModes {
 	 */
 	/* axis angle rotations */
 	ROT_MODE_AXISANGLE = -1,
+	/* quaternion slerp-interpolated rotations */
+	ROT_MODE_QUAT_SLERP = -2,
+	/* quaternion squad-interpolated rotations */
+	ROT_MODE_QUAT_SQUAD = -3,
 
-	ROT_MODE_MIN = ROT_MODE_AXISANGLE,  /* sentinel for Py API */
+	ROT_MODE_MIN = ROT_MODE_QUAT_SQUAD,  /* sentinel for Py API */
 	ROT_MODE_MAX = ROT_MODE_ZYX
 } eRotationModes;
 

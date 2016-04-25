@@ -470,6 +470,10 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 		MEM_freeN(ob->curve_cache);
 	}
 
+	/* Free quaternion interpolation cache */
+	if (ob->quat_cache)
+		MEM_freeN(ob->quat_cache);
+
 	BKE_previewimg_free(&ob->preview);
 }
 
@@ -1915,7 +1919,7 @@ void BKE_object_scale_to_mat3(Object *ob, float mat[3][3])
 	size_to_mat3(mat, vec);
 }
 
-void BKE_object_rot_to_mat3(Object *ob, float mat[3][3], bool use_drot)
+void BKE_object_rot_to_mat3(struct Scene *scene, Object *ob, float mat[3][3], bool use_drot)
 {
 	float rmat[3][3], dmat[3][3];
 	
@@ -1934,7 +1938,7 @@ void BKE_object_rot_to_mat3(Object *ob, float mat[3][3], bool use_drot)
 		axis_angle_to_mat3(rmat, ob->rotAxis, ob->rotAngle);
 		axis_angle_to_mat3(dmat, ob->drotAxis, ob->drotAngle);
 	}
-	else {
+	else if (ob->rotmode == ROT_MODE_QUAT) {
 		/* quats are normalized before use to eliminate scaling issues */
 		float tquat[4];
 		
@@ -1943,6 +1947,60 @@ void BKE_object_rot_to_mat3(Object *ob, float mat[3][3], bool use_drot)
 		
 		normalize_qt_qt(tquat, ob->dquat);
 		quat_to_mat3(dmat, tquat);
+	}
+	else if (ob->rotmode == ROT_MODE_QUAT_SLERP) {
+		/* slerp - direct spherical interpolation */
+		float tquat[4];
+
+		if (scene && (ob->recalc & OB_RECALC_TIME)) {
+			/* scene-time-sensitive quaternion interpolation */
+			float ctime = BKE_scene_frame_get(scene);
+
+			BKE_animsys_interp_qt_slerp(tquat, ob, NULL, ctime, false);
+			normalize_qt(tquat);
+			quat_to_mat3(rmat, tquat);
+
+			if (use_drot) {
+				BKE_animsys_interp_qt_slerp(tquat, ob, NULL, ctime, true);
+				normalize_qt(tquat);
+				quat_to_mat3(dmat, tquat);
+			}
+
+		} else {
+			/* normal quaternion interpolation failsafe */
+			normalize_qt_qt(tquat, ob->quat);
+			quat_to_mat3(rmat, tquat);
+
+			normalize_qt_qt(tquat, ob->dquat);
+			quat_to_mat3(dmat, tquat);
+		}
+	}
+	else if (ob->rotmode == ROT_MODE_QUAT_SQUAD) {
+		/* squad - direct spherical-quadrangle interpolation */
+		float tquat[4];
+
+		if (scene && (ob->recalc & OB_RECALC_TIME)) {
+			/* scene-time-sensitive quaternion interpolation */
+			float ctime = BKE_scene_frame_get(scene);
+
+			BKE_animsys_interp_qt_squad(tquat, ob, NULL, ctime, false);
+			normalize_qt(tquat);
+			quat_to_mat3(rmat, tquat);
+
+			if (use_drot) {
+				BKE_animsys_interp_qt_squad(tquat, ob, NULL, ctime, true);
+				normalize_qt(tquat);
+				quat_to_mat3(dmat, tquat);
+			}
+
+		} else {
+			/* normal quaternion interpolation failsafe */
+			normalize_qt_qt(tquat, ob->quat);
+			quat_to_mat3(rmat, tquat);
+
+			normalize_qt_qt(tquat, ob->dquat);
+			quat_to_mat3(dmat, tquat);
+		}
 	}
 	
 	/* combine these rotations */
@@ -1958,6 +2016,8 @@ void BKE_object_mat3_to_rot(Object *ob, float mat[3][3], bool use_compat)
 
 	switch (ob->rotmode) {
 		case ROT_MODE_QUAT:
+		case ROT_MODE_QUAT_SLERP:
+		case ROT_MODE_QUAT_SQUAD:
 		{
 			float dquat[4];
 			mat3_normalized_to_quat(ob->quat, mat);
@@ -2063,7 +2123,7 @@ void BKE_object_tfm_protected_restore(Object *ob,
 	}
 }
 
-void BKE_object_to_mat3(Object *ob, float mat[3][3]) /* no parent */
+void BKE_object_to_mat3(struct Scene *scene, Object *ob, float mat[3][3]) /* no parent */
 {
 	float smat[3][3];
 	float rmat[3][3];
@@ -2073,15 +2133,15 @@ void BKE_object_to_mat3(Object *ob, float mat[3][3]) /* no parent */
 	BKE_object_scale_to_mat3(ob, smat);
 
 	/* rot */
-	BKE_object_rot_to_mat3(ob, rmat, true);
+	BKE_object_rot_to_mat3(scene, ob, rmat, true);
 	mul_m3_m3m3(mat, rmat, smat);
 }
 
-void BKE_object_to_mat4(Object *ob, float mat[4][4])
+void BKE_object_to_mat4(struct Scene *scene, Object *ob, float mat[4][4])
 {
 	float tmat[3][3];
 	
-	BKE_object_to_mat3(ob, tmat);
+	BKE_object_to_mat3(scene, ob, tmat);
 	
 	copy_m4_m3(mat, tmat);
 
@@ -2454,7 +2514,7 @@ static void solve_parenting(Scene *scene, Object *ob, Object *par, float obmat[4
 	float tmat[4][4];
 	float locmat[4][4];
 	
-	BKE_object_to_mat4(ob, locmat);
+	BKE_object_to_mat4(scene, ob, locmat);
 	
 	if (ob->partype & PARSLOW) copy_m4_m4(slowmat, obmat);
 
@@ -2525,7 +2585,7 @@ void BKE_object_where_is_calc_time_ex(Scene *scene, Object *ob, float ctime,
 		}
 	}
 	else {
-		BKE_object_to_mat4(ob, ob->obmat);
+		BKE_object_to_mat4(scene, ob, ob->obmat);
 	}
 
 	/* try to fall back to the scene rigid body world if none given */
@@ -2569,7 +2629,7 @@ void BKE_object_where_is_calc_mat4(Scene *scene, Object *ob, float obmat[4][4])
 			where_is_object_parslow(ob, obmat, slowmat);
 	}
 	else {
-		BKE_object_to_mat4(ob, obmat);
+		BKE_object_to_mat4(scene, ob, obmat);
 	}
 }
 
@@ -3129,6 +3189,20 @@ void BKE_object_handle_update_ex(EvaluationContext *eval_ctx,
 				 * on file load */
 				if (ob->pose == NULL || (ob->pose->flag & POSE_RECALC))
 					BKE_pose_rebuild(ob, ob->data);
+			}
+		}
+
+		/* invalidate quaternion interpolation cache */
+		if (ob->adt && (ob->adt->recalc & ADT_RECALC_ANIM)) {
+			if (ob->quat_cache)
+				BKE_animsys_invalidate_quat_interp_cache(ob->quat_cache);
+
+			if (ob->type == OB_ARMATURE) {
+				/* invalidate quaternion interpolation cache for poses */
+				bPoseChannel *pchan;
+				for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next)
+					if (pchan->quat_cache)
+						BKE_animsys_invalidate_quat_interp_cache(pchan->quat_cache);
 			}
 		}
 

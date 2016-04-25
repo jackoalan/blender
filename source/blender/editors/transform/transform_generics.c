@@ -2033,7 +2033,9 @@ void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot)
 	}
 
 
-	if (td->ext->rotOrder == ROT_MODE_QUAT) {
+	if (td->ext->rotOrder == ROT_MODE_QUAT ||
+		td->ext->rotOrder == ROT_MODE_QUAT_SLERP ||
+		td->ext->rotOrder == ROT_MODE_QUAT_SQUAD) {
 		float quat[4];
 
 		/* calculate the total rotatation */

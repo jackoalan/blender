@@ -513,6 +513,59 @@ float nlastrip_get_frame(NlaStrip *strip, float cframe, short mode)
 	}
 }
 
+/* non clipped mapping for strip-time -> global time
+ *  maps a specified nlastrip evaltime + cycle index to global time
+ *
+ * only secure for 'internal' (i.e. within AnimSys evaluation) operations,
+ * but should not be directly relied on for stuff which interacts with editors
+ */
+float nlastrip_map_evaltime_cycle(NlaEvalStrip *nes, float evaltime, int cycle, bool *inside_strip)
+{
+	NlaStrip *strip = nes->strip;
+
+	/* in the quaternion interpolation use-case, it's useful to have
+	 * this user-time eval here. It could be spun off to an outer API instead */
+#if 0
+	float orig_eval = evaltime;
+	if ((strip->flag & NLASTRIP_FLAG_USR_TIME) != 0) {
+		/* calculate then execute each curve */
+		for (FCurve *fcu = strip->fcurves.first; fcu; fcu = fcu->next) {
+			/* check if this F-Curve doesn't belong to a muted group */
+			if ((fcu->grp == NULL) || (fcu->grp->flag & AGRP_MUTED) == 0) {
+				/* check if this curve should be skipped */
+				if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
+					if (!strcmp(fcu->rna_path, "strip_time")) {
+						evaltime = evaluate_fcurve(fcu, evaltime);
+						break;
+					}
+				}
+			}
+		}
+	}
+#endif
+	printf("UT: %f %f\n", evaltime, strip->strip_time);
+
+	/* Same steps as the NLATIME_CONVERT_MAP mode,
+	 * restoring the global time using the repeat cycle */
+	float scale = fabsf(strip->scale);
+	float actlength = strip->actend - strip->actstart;
+	float cycle_base = actlength * scale * cycle;
+	float cycle_max = actlength * scale * strip->repeat;
+	float eval = cycle_base;
+	if ((strip->flag & NLASTRIP_FLAG_REVERSE) != 0)
+		eval += scale * (actlength - (evaltime - strip->actstart));
+	else
+		eval += scale * (evaltime - strip->actstart);
+
+	/* handle whole-number repeat end of strip case, to ensure final quaternion is used */
+	if (IS_EQF(eval, cycle_max) && IS_EQF(strip->repeat, floorf(strip->repeat)))
+		*inside_strip = true;
+	else
+		*inside_strip = (eval < cycle_max);
+
+	return strip->start + eval;
+}
+
 
 /* Non clipped mapping for strip-time <-> global time
  *	mode = eNlaTime_ConvertModes -> NLATIME_CONVERT_*

@@ -347,7 +347,7 @@ void BKE_constraint_mat_convertspace(
 				 *     local space either... Meh :|
 				 *     --mont29
 				 */
-				BKE_object_to_mat4(ob, diff_mat);
+				BKE_object_to_mat4(NULL, ob, diff_mat);
 				if (!keep_scale) {
 					normalize_m4(diff_mat);
 				}
@@ -369,7 +369,7 @@ void BKE_constraint_mat_convertspace(
 				 * transform-property-rotated axes. So add back this rotation component.
 				 */
 				/* XXX See comment above for world->local case... */
-				BKE_object_to_mat4(ob, diff_mat);
+				BKE_object_to_mat4(NULL, ob, diff_mat);
 				if (!keep_scale) {
 					normalize_m4(diff_mat);
 				}
@@ -2139,7 +2139,7 @@ static void actcon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintT
 			/* evaluate using workob */
 			/* FIXME: we don't have any consistent standards on limiting effects on object... */
 			what_does_obaction(cob->ob, &workob, NULL, data->act, NULL, t);
-			BKE_object_to_mat4(&workob, ct->matrix);
+			BKE_object_to_mat4(cob->scene, &workob, ct->matrix);
 		}
 		else if (cob->type == CONSTRAINT_OBTYPE_BONE) {
 			Object workob;
@@ -2161,7 +2161,7 @@ static void actcon_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstraintT
 			what_does_obaction(cob->ob, &workob, pose, data->act, pchan->name, t);
 			
 			/* convert animation to matrices for use here */
-			BKE_pchan_calc_mat(tchan);
+			BKE_pchan_calc_mat(cob->scene, &workob, tchan);
 			copy_m4_m4(ct->matrix, tchan->chan_mat);
 			
 			/* Clean up */

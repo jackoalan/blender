@@ -43,6 +43,7 @@
 #include "BLI_alloca.h"
 #include "BLI_dynstr.h"
 #include "BLI_listbase.h"
+#include "BLI_math_rotation.h"
 
 #include "BLT_translation.h"
 
@@ -1820,6 +1821,9 @@ static void nlastrip_evaluate_controls(NlaStrip *strip, float ctime)
 	if ((strip->flag & NLASTRIP_FLAG_USR_INFLUENCE) == 0)
 		strip->influence = nlastrip_get_influence(strip, ctime);
 
+	/* back this up in case a temporary evaluation wishes to restore the state */
+	strip->strip_ctime = ctime;
+
 	/* if user can control the evaluation time (using F-Curves), consider the option which allows this time to be clamped
 	 * to lie within extents of the action-clip, so that a steady changing rate of progress through several cycles of the clip
 	 * can be achieved easily
@@ -1830,12 +1834,13 @@ static void nlastrip_evaluate_controls(NlaStrip *strip, float ctime)
 }
 
 /* gets the strip active at the current time for a list of strips for evaluation purposes */
-NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list, ListBase *strips, short index, float ctime)
+NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list, ListBase *strips, short index, float ctime, bool no_usr_time)
 {
 	NlaStrip *strip, *estrip = NULL;
 	NlaEvalStrip *nes;
 	short side = 0;
-	
+	float orig_ctime = ctime;
+
 	/* loop over strips, checking if they fall within the range */
 	for (strip = strips->first; strip; strip = strip->next) {
 		/* check if current time occurs within this strip  */
@@ -1901,13 +1906,20 @@ NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list, ListBase *strips, short 
 			ctime = estrip->end;
 			break;
 	}
+
+	/* carry this value along into the NlaEvalStrip */
+	float prev_ctime = estrip->strip_ctime;
 	
 	/* evaluate strip's evaluation controls  
 	 *  - skip if no influence (i.e. same effect as muting the strip)
 	 *	- negative influence is not supported yet... how would that be defined?
 	 */
 	/* TODO: this sounds a bit hacky having a few isolated F-Curves stuck on some data it operates on... */
+	int backup_flag = estrip->flag;
+	if (no_usr_time) /* quaternion user interpolation solves by moving the keyframes rather than evaltime */
+		estrip->flag &= ~NLASTRIP_FLAG_USR_TIME;
 	nlastrip_evaluate_controls(estrip, ctime);
+	estrip->flag = backup_flag;
 	if (estrip->influence <= 0.0f)
 		return NULL;
 		
@@ -1938,6 +1950,16 @@ NlaEvalStrip *nlastrips_ctime_get_strip(ListBase *list, ListBase *strips, short 
 	nes->strip_mode = side;
 	nes->track_index = index;
 	nes->strip_time = estrip->strip_time;
+	nes->strip_ctime = orig_ctime;
+	nes->prev_strip_ctime = prev_ctime;
+
+	/* store cycle so we can map any point within strip back to global */
+	if ((strip->flag & NLASTRIP_FLAG_USR_TIME) == 0) {
+		float scale = fabsf(strip->scale);
+		float actlength = strip->actend - strip->actstart;
+		nes->strip_cycle = (ctime - strip->start) / (actlength * scale);
+	} else
+		nes->strip_cycle = 0;
 	
 	if (list)
 		BLI_addtail(list, nes);
@@ -2349,7 +2371,7 @@ static void nlastrip_evaluate_meta(PointerRNA *ptr, ListBase *channels, ListBase
 	
 	/* find the child-strip to evaluate */
 	evaltime = (nes->strip_time * (strip->end - strip->start)) + strip->start;
-	tmp_nes = nlastrips_ctime_get_strip(NULL, &strip->strips, -1, evaltime);
+	tmp_nes = nlastrips_ctime_get_strip(NULL, &strip->strips, -1, evaltime, false);
 	
 	/* directly evaluate child strip into accumulation buffer... 
 	 * - there's no need to use a temporary buffer (as it causes issues [T40082])
@@ -2491,7 +2513,7 @@ static void animsys_evaluate_nla(ListBase *echannels, PointerRNA *ptr, AnimData 
 			has_strips = true;
 			
 		/* otherwise, get strip to evaluate for this channel */
-		nes = nlastrips_ctime_get_strip(&estrips, &nlt->strips, track_index, ctime);
+		nes = nlastrips_ctime_get_strip(&estrips, &nlt->strips, track_index, ctime, false);
 		if (nes) nes->track = nlt;
 	}
 	
@@ -2532,7 +2554,7 @@ static void animsys_evaluate_nla(ListBase *echannels, PointerRNA *ptr, AnimData 
 			}
 			
 			/* add this to our list of evaluation strips */
-			nlastrips_ctime_get_strip(&estrips, &dummy_trackslist, -1, ctime);
+			nlastrips_ctime_get_strip(&estrips, &dummy_trackslist, -1, ctime, false);
 		}
 		else {
 			/* special case - evaluate as if there isn't any NLA data */
@@ -2666,7 +2688,7 @@ void BKE_animsys_evaluate_animdata(Scene *scene, ID *id, AnimData *adt, float ct
 	
 	/* get pointer to ID-block for RNA to use */
 	RNA_id_pointer_create(id, &id_ptr);
-	
+
 	/* recalculate keyframe data:
 	 *	- NLA before Active Action, as Active Action behaves as 'tweaking track'
 	 *	  that overrides 'rough' work in NLA
@@ -2845,7 +2867,829 @@ void BKE_animsys_evaluate_all_animation(Main *main, Scene *scene, float ctime)
 	EVAL_ANIM_NODETREE_IDS(main->scene.first, Scene, ADT_RECALC_ANIM);
 }
 
-/* ***************************************** */ 
+/* ********************************************************* */
+/* ------------ Quaternion Interpolation API --------------- */
+
+/* Quaternion interpolation cache
+ * (for reusing 4 sequential SLERP/SQUAD quaternions within Objects / PoseChannels) */
+typedef struct QuaternionInterpCache {
+	float eval_ctime;				/* ctime evaluated for present cache state (init to -FLT_MAX) */
+	struct QuaternionInterp {
+		float ctime;				/* BezTriple time of this particular quaternion (init to FLT_MAX) */
+		float quat[4];				/* cached quaternion */
+	} quats[4];
+} QuaternionInterpCache;
+
+enum eQuaternionInterpUpdatePass
+{
+	QUAT_INTERP_UPDATE_PASS_TIMES,
+	QUAT_INTERP_UPDATE_PASS_VALUES2,
+	QUAT_INTERP_UPDATE_PASS_VALUES4,
+};
+
+typedef struct QuaternionInterpUpdateContext
+{
+	enum eQuaternionInterpUpdatePass pass;
+	float evaltime;
+	float times[4];
+	QuaternionInterpCache *quat_cache;
+	Object *ob;
+	bPoseChannel *pchan;
+	PointerRNA *ptr;
+} QuaternionInterpUpdateContext;
+
+/* Accumulate cache with a single fcurve keyframe, reusing existing quaterions if able
+ * - when this returns true, the F-Curve evaluation pass may be skipped */
+static bool accumulate_interp_qt_cache(QuaternionInterpCache *quat_cache, float evaltime,
+									   int cache_index, int fcu_index, float fcu_time, float fcu_value)
+{
+	struct QuaternionInterp *interp = &quat_cache->quats[cache_index];
+
+	/* cache is incomplete (missing quaternion components) if this test fails */
+	if (quat_cache->eval_ctime != -FLT_MAX)
+	{
+		if (evaltime == quat_cache->eval_ctime) {
+			return true; /* found */
+		}
+		else if (evaltime > quat_cache->eval_ctime) {
+			/* search forwards for cached quaternion */
+			for (int i = cache_index; i < 4; ++i) {
+				if (quat_cache->quats[i].ctime == fcu_time) {
+					if (i != cache_index) {
+						interp->ctime = fcu_time;
+						copy_qt_qt(interp->quat, quat_cache->quats[i].quat);
+					}
+					return true; /* found */
+				}
+			}
+		}
+		else {
+			/* search backwards for cached quaternion */
+			for (int i = cache_index; i >= 0; --i) {
+				if (quat_cache->quats[i].ctime == fcu_time) {
+					if (i != cache_index) {
+						interp->ctime = fcu_time;
+						copy_qt_qt(interp->quat, quat_cache->quats[i].quat);
+					}
+					return true; /* found */
+				}
+			}
+		}
+	}
+
+	/* not found */
+	interp->quat[fcu_index] = fcu_value;
+	return false;
+}
+
+/* Forward declaration of this potentially recursive entry */
+static void nlastrip_update_interp_qt_cache(QuaternionInterpUpdateContext *context, ListBase *modifiers, NlaEvalStrip *nes);
+
+/* Search Action/Object/PoseChannel for nearest rotation interpolation points */
+static void animsys_update_action_interp_qt_cache(QuaternionInterpUpdateContext *context, bAction *act, float ctime, int ccycle, NlaEvalStrip *nes)
+{
+	NlaStrip *strip = NULL;
+	if (nes) strip = nes->strip;
+	ListBase rotCurves = {NULL, NULL};
+	int transFlags = action_get_item_transforms_filtered(act, context->ob, context->pchan, &rotCurves, ACT_TRANS_ROT);
+
+	if ((transFlags & ACT_TRANS_ROT) != 0)
+	{
+		/* calculate then execute each curve */
+		for (LinkData *fcud = rotCurves.first; fcud; fcud = fcud->next) {
+			FCurve *fcu = fcud->data;
+			if (((unsigned)fcu->array_index) > 3u)
+				continue;
+
+			/* check if this F-Curve doesn't belong to a muted group */
+			if ((fcu->grp == NULL) || (fcu->grp->flag & AGRP_MUTED) == 0) {
+				/* check if this curve should be skipped */
+				if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
+
+					/* handle time-selection or evaluation */
+					if (context->pass == QUAT_INTERP_UPDATE_PASS_TIMES)
+						find_fcurve_interp_qt_times(context->times, fcu, ctime, ccycle, nes);
+					else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES2) {
+						/* optimal evaluation for slerp */
+						if (context->evaltime > context->quat_cache->eval_ctime) {
+							for (int i = 1; i <= 2; ++i) { /* forward-cache */
+								if (fabsf(context->times[i]) == FLT_MAX)
+									continue;
+								/* cache-test (true return didn't write 0.f value) */
+								/*
+								if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+															   fcu->array_index, context->times[i], 0.f))
+									continue;*/
+								float eval_time = context->times[i];
+								if (strip)
+									eval_time = nlastrip_get_frame(strip, context->times[i], NLATIME_CONVERT_EVAL);
+								accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+														   fcu->array_index, context->times[i],
+														   evaluate_fcurve(fcu, eval_time));
+							}
+						}
+						else {
+							for (int i = 2; i >= 1; --i) { /* reverse-cache */
+								if (fabsf(context->times[i]) == FLT_MAX)
+									continue;
+								/* cache-test (true return didn't write 0.f value) */
+								/*
+								if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+															   fcu->array_index, context->times[i], 0.f))
+									continue;*/
+								float eval_time = context->times[i];
+								if (strip)
+									eval_time = nlastrip_get_frame(strip, context->times[i], NLATIME_CONVERT_EVAL);
+								accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+														   fcu->array_index, context->times[i],
+														   evaluate_fcurve(fcu, eval_time));
+							}
+						}
+					}
+					else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES4) {
+						/* optimal evaluation for squad */
+						if (context->evaltime > context->quat_cache->eval_ctime) {
+							for (int i = 0; i <= 3; ++i) { /* forward-cache */
+								if (fabsf(context->times[i]) == FLT_MAX)
+									continue;
+								/* cache-test (true return didn't write 0.f value) */
+								if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+															   fcu->array_index, context->times[i], 0.f))
+									continue;
+								float eval_time = context->times[i];
+								if (strip)
+									eval_time = nlastrip_get_frame(strip, context->times[i], NLATIME_CONVERT_EVAL);
+								accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+														   fcu->array_index, context->times[i],
+														   evaluate_fcurve(fcu, eval_time));
+							}
+						}
+						else {
+							for (int i = 3; i >= 0; --i) { /* reverse-cache */
+								if (fabsf(context->times[i]) == FLT_MAX)
+									continue;
+								/* cache-test (true return didn't write 0.f value) */
+								if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+															   fcu->array_index, context->times[i], 0.f))
+									continue;
+								float eval_time = context->times[i];
+								if (strip)
+									eval_time = nlastrip_get_frame(strip, context->times[i], NLATIME_CONVERT_EVAL);
+								accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+														   fcu->array_index, context->times[i],
+														   evaluate_fcurve(fcu, eval_time));
+							}
+						}
+					}
+
+				}
+			}
+		}
+	}
+
+	BLI_freelistN(&rotCurves);
+}
+
+/* Incorporate NlaEvalChannel into rotation interpolation */
+static void animsys_update_echannels_interp_qt_cache(QuaternionInterpUpdateContext *context, int index, float values[4])
+{
+	if (((unsigned)index) > 3u)
+		return;
+
+	if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES2) {
+		/* optimal evaluation for slerp */
+		if (context->evaltime > context->quat_cache->eval_ctime) {
+			for (int i = 1; i <= 2; ++i) { /* forward-cache */
+				if (fabsf(context->times[i]) == FLT_MAX)
+					continue;
+				/* cache-test (true return didn't write 0.f value) */
+				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+											   index, context->times[i], 0.f))
+					continue;
+				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+										   index, context->times[i], values[i]);
+			}
+		}
+		else {
+			for (int i = 2; i >= 1; --i) { /* reverse-cache */
+				if (fabsf(context->times[i]) == FLT_MAX)
+					continue;
+				/* cache-test (true return didn't write 0.f value) */
+				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+											   index, context->times[i], 0.f))
+					continue;
+				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+										   index, context->times[i], values[i]);
+			}
+		}
+	}
+	else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES4) {
+		/* optimal evaluation for squad */
+		if (context->evaltime > context->quat_cache->eval_ctime) {
+			for (int i = 0; i <= 3; ++i) { /* forward-cache */
+				if (fabsf(context->times[i]) == FLT_MAX)
+					continue;
+				/* cache-test (true return didn't write 0.f value) */
+				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+											   index, context->times[i], 0.f))
+					continue;
+				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+										   index, context->times[i], values[i]);
+			}
+		}
+		else {
+			for (int i = 3; i >= 0; --i) { /* reverse-cache */
+				if (fabsf(context->times[i]) == FLT_MAX)
+					continue;
+				/* cache-test (true return didn't write 0.f value) */
+				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+											   index, context->times[i], 0.f))
+					continue;
+				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
+										   index, context->times[i], values[i]);
+			}
+		}
+	}
+}
+
+/* searches actionclip strip for interpolation points */
+static void nlastrip_update_interp_qt_cache_actionclip(QuaternionInterpUpdateContext *context, ListBase *modifiers, NlaEvalStrip *nes)
+{
+	FModifierStackStorage *storage;
+	ListBase tmp_modifiers = {NULL, NULL};
+	NlaStrip *strip = nes->strip;
+	float evaltime;
+
+	/* sanity checks for action */
+	if (strip == NULL)
+		return;
+
+	if (strip->act == NULL) {
+		printf("NLA-Strip Eval Error: Strip '%s' has no Action\n", strip->name);
+		return;
+	}
+
+	/* join this strip's modifiers to the parent's modifiers (own modifiers first) */
+	nlaeval_fmodifiers_join_stacks(&tmp_modifiers, &strip->modifiers, modifiers);
+
+	/* evaluate strip's modifiers which modify time to evaluate the base curves at */
+	storage = evaluate_fmodifiers_storage_new(&tmp_modifiers);
+	evaltime = evaluate_time_fmodifiers(storage, &tmp_modifiers, NULL, 0.0f, strip->strip_time);
+
+	/* search at modified evaltime */
+	animsys_update_action_interp_qt_cache(context, strip->act, evaltime, nes->strip_cycle, nes);
+
+	/* free temporary storage */
+	evaluate_fmodifiers_storage_free(storage);
+
+	/* unlink this strip's modifiers from the parent's modifiers again */
+	nlaeval_fmodifiers_split_stacks(&strip->modifiers, modifiers);
+}
+
+/* evaluate transition strip */
+static void nlastrip_update_interp_qt_cache_transition(QuaternionInterpUpdateContext *context, ListBase *modifiers, NlaEvalStrip *nes)
+{
+	/* Note: keep in sync with nlastrip_evaluate_transition */
+	ListBase tmp_modifiers = {NULL, NULL};
+	NlaEvalStrip tmp_nes;
+	NlaStrip *s1, *s2;
+
+	/* join this strip's modifiers to the parent's modifiers (own modifiers first) */
+	nlaeval_fmodifiers_join_stacks(&tmp_modifiers, &nes->strip->modifiers, modifiers);
+
+	/* get the two strips to operate on
+	 *	- we use the endpoints of the strips directly flanking our strip
+	 *	  using these as the endpoints of the transition (destination and source)
+	 *	- these should have already been determined to be valid...
+	 *	- if this strip is being played in reverse, we need to swap these endpoints
+	 *	  otherwise they will be interpolated wrong
+	 */
+	if (nes->strip->flag & NLASTRIP_FLAG_REVERSE) {
+		s1 = nes->strip->next;
+		s2 = nes->strip->prev;
+	}
+	else {
+		s1 = nes->strip->prev;
+		s2 = nes->strip->next;
+	}
+
+	/* prepare template for 'evaluation strip'
+	 *	- based on the transition strip's evaluation strip data
+	 *	- strip_mode is NES_TIME_TRANSITION_* based on which endpoint
+	 *	- strip_time is the 'normalized' (i.e. in-strip) time for evaluation,
+	 *	  which doubles up as an additional weighting factor for the strip influences
+	 *	  which allows us to appear to be 'interpolating' between the two extremes
+	 */
+	tmp_nes = *nes;
+
+	/* evaluate these strips into a temp-buffer (tmp_channels) */
+	/* FIXME: modifier evaluation here needs some work... */
+	/* first strip */
+	tmp_nes.strip_mode = NES_TIME_TRANSITION_START;
+	tmp_nes.strip = s1;
+	nlastrip_update_interp_qt_cache(context, &tmp_modifiers, &tmp_nes);
+
+	/* second strip */
+	tmp_nes.strip_mode = NES_TIME_TRANSITION_END;
+	tmp_nes.strip = s2;
+	nlastrip_update_interp_qt_cache(context, &tmp_modifiers, &tmp_nes);
+
+
+	/* unlink this strip's modifiers from the parent's modifiers again */
+	nlaeval_fmodifiers_split_stacks(&nes->strip->modifiers, modifiers);
+}
+
+/* evaluate meta-strip */
+static void nlastrip_update_interp_qt_cache_meta(QuaternionInterpUpdateContext *context, ListBase *modifiers, NlaEvalStrip *nes)
+{
+	/* Note: keep in sync with nlastrip_evaluate_meta */
+	ListBase tmp_modifiers = {NULL, NULL};
+	NlaStrip *strip = nes->strip;
+	NlaEvalStrip *tmp_nes;
+	float evaltime;
+
+	/* meta-strip was calculated normally to have some time to be evaluated at
+	 * and here we 'look inside' the meta strip, treating it as a decorated window to
+	 * it's child strips, which get evaluated as if they were some tracks on a strip
+	 * (but with some extra modifiers to apply).
+	 *
+	 * NOTE: keep this in sync with animsys_evaluate_nla()
+	 */
+
+	/* join this strip's modifiers to the parent's modifiers (own modifiers first) */
+	nlaeval_fmodifiers_join_stacks(&tmp_modifiers, &strip->modifiers, modifiers);
+
+	/* find the child-strip to evaluate */
+	evaltime = (nes->strip_time * (strip->end - strip->start)) + strip->start;
+	tmp_nes = nlastrips_ctime_get_strip(NULL, &strip->strips, -1, evaltime, true);
+
+	/* directly evaluate child strip into accumulation buffer...
+	 * - there's no need to use a temporary buffer (as it causes issues [T40082])
+	 */
+	if (tmp_nes) {
+		nlastrip_update_interp_qt_cache(context, &tmp_modifiers, tmp_nes);
+
+		/* free temp eval-strip */
+		MEM_freeN(tmp_nes);
+	}
+
+	/* unlink this strip's modifiers from the parent's modifiers again */
+	nlaeval_fmodifiers_split_stacks(&strip->modifiers, modifiers);
+}
+
+/* searches the given evaluation strip for interpolation points */
+static void nlastrip_update_interp_qt_cache(QuaternionInterpUpdateContext *context, ListBase *modifiers, NlaEvalStrip *nes)
+{
+	/* Note: keep in sync with nlastrip_evaluate */
+	NlaStrip *strip = nes->strip;
+
+	/* to prevent potential infinite recursion problems (i.e. transition strip, beside meta strip containing a transition
+	 * several levels deep inside it), we tag the current strip as being evaluated, and clear this when we leave
+	 */
+	/* TODO: be careful with this flag, since some edit tools may be running and have set this while animplayback was running */
+	if (strip->flag & NLASTRIP_FLAG_EDIT_TOUCHED)
+		return;
+	strip->flag |= NLASTRIP_FLAG_EDIT_TOUCHED;
+
+	/* actions to take depend on the type of strip */
+	switch (strip->type) {
+		case NLASTRIP_TYPE_CLIP: /* action-clip */
+			nlastrip_update_interp_qt_cache_actionclip(context, modifiers, nes);
+			break;
+		case NLASTRIP_TYPE_TRANSITION: /* transition */
+			nlastrip_update_interp_qt_cache_transition(context, modifiers, nes);
+			break;
+		case NLASTRIP_TYPE_META: /* meta */
+			nlastrip_update_interp_qt_cache_meta(context, modifiers, nes);
+			break;
+		default: /* do nothing */
+			break;
+	}
+
+	/* clear temp recursion safe-check */
+	strip->flag &= ~NLASTRIP_FLAG_EDIT_TOUCHED;
+}
+
+/* Search NLA for nearest surrounding interpolation points */
+static void animsys_update_nla_interp_qt_cache(QuaternionInterpUpdateContext *context, AnimData *adt, float ctime)
+{
+	/* Note: keep in sync with animsys_evaluate_nla */
+	NlaTrack *nlt;
+	short track_index = 0;
+	bool has_strips = false;
+
+	ListBase time_estrips = {NULL, NULL};
+	ListBase val_estrips[4] = {{0}};
+	NlaEvalStrip *nes;
+
+	NlaStrip dummy_strip = {NULL}; /* dummy strip for active action */
+
+
+	/* 1. get the stack of strips to evaluate at current time (influence calculated here) */
+	for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next, track_index++) {
+		/* stop here if tweaking is on and this strip is the tweaking track (it will be the first one that's 'disabled')... */
+		if ((adt->flag & ADT_NLA_EDIT_ON) && (nlt->flag & NLATRACK_DISABLED))
+			break;
+
+		/* solo and muting are mutually exclusive... */
+		if (adt->flag & ADT_NLA_SOLO_TRACK) {
+			/* skip if there is a solo track, but this isn't it */
+			if ((nlt->flag & NLATRACK_SOLO) == 0)
+				continue;
+			/* else - mute doesn't matter */
+		}
+		else {
+			/* no solo tracks - skip track if muted */
+			if (nlt->flag & NLATRACK_MUTED)
+				continue;
+		}
+
+		/* if this track has strips (but maybe they won't be suitable), set has_strips
+		 *	- used for mainly for still allowing normal action evaluation...
+		 */
+		if (nlt->strips.first)
+			has_strips = true;
+
+		/* otherwise, get strip to evaluate for this channel */
+		if (context->pass == QUAT_INTERP_UPDATE_PASS_TIMES) {
+			nes = nlastrips_ctime_get_strip(&time_estrips, &nlt->strips, track_index, ctime, true);
+			if (nes) nes->track = nlt;
+		}
+		else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES2) {
+			for (int i = 1; i <= 2; ++i) {
+				nes = nlastrips_ctime_get_strip(&val_estrips[i], &nlt->strips, track_index, context->times[i], false);
+				if (nes) nes->track = nlt;
+			}
+		}
+		else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES4) {
+			for (int i = 0; i <= 3; ++i) {
+				nes = nlastrips_ctime_get_strip(&val_estrips[i], &nlt->strips, track_index, context->times[i], false);
+				if (nes) nes->track = nlt;
+			}
+		}
+	}
+
+	/* add 'active' Action (may be tweaking track) as last strip to evaluate in NLA stack
+	 *	- only do this if we're not exclusively evaluating the 'solo' NLA-track
+	 *	- however, if the 'solo' track houses the current 'tweaking' strip,
+	 *	  then we should allow this to play, otherwise nothing happens
+	 */
+	if ((adt->action) && ((adt->flag & ADT_NLA_SOLO_TRACK) == 0 || (adt->flag & ADT_NLA_EDIT_ON))) {
+		/* if there are strips, evaluate action as per NLA rules */
+		if ((has_strips) || (adt->actstrip)) {
+			/* make dummy NLA strip, and add that to the stack */
+			ListBase dummy_trackslist;
+
+			dummy_trackslist.first = dummy_trackslist.last = &dummy_strip;
+
+			if ((nlt) && !(adt->flag & ADT_NLA_EDIT_NOMAP)) {
+				/* edit active action in-place according to its active strip, so copy the data  */
+				memcpy(&dummy_strip, adt->actstrip, sizeof(NlaStrip));
+				dummy_strip.next = dummy_strip.prev = NULL;
+			}
+			else {
+				/* set settings of dummy NLA strip from AnimData settings */
+				dummy_strip.act = adt->action;
+				dummy_strip.remap = adt->remap;
+
+				/* action range is calculated taking F-Modifiers into account (which making new strips doesn't do due to the troublesome nature of that) */
+				calc_action_range(dummy_strip.act, &dummy_strip.actstart, &dummy_strip.actend, 1);
+				dummy_strip.start = dummy_strip.actstart;
+				dummy_strip.end = (IS_EQF(dummy_strip.actstart, dummy_strip.actend)) ?  (dummy_strip.actstart + 1.0f) : (dummy_strip.actend);
+
+				dummy_strip.blendmode = adt->act_blendmode;
+				dummy_strip.extendmode = adt->act_extendmode;
+				dummy_strip.influence = adt->act_influence;
+
+				/* NOTE: must set this, or else the default setting overrides, and this setting doesn't work */
+				dummy_strip.flag |= NLASTRIP_FLAG_USR_INFLUENCE;
+			}
+
+			/* add this to our list of evaluation strips */
+			if (context->pass == QUAT_INTERP_UPDATE_PASS_TIMES) {
+				nlastrips_ctime_get_strip(&time_estrips, &dummy_trackslist, -1, ctime, true);
+			}
+			else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES2) {
+				for (int i = 1; i <= 2; ++i) {
+					nlastrips_ctime_get_strip(&val_estrips[i], &dummy_trackslist, -1, context->times[i], false);
+				}
+			}
+			else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES4) {
+				for (int i = 0; i <= 3; ++i) {
+					nlastrips_ctime_get_strip(&val_estrips[i], &dummy_trackslist, -1, context->times[i], false);
+				}
+			}
+		}
+		else {
+			/* special case - evaluate as if there isn't any NLA data */
+			/* TODO: this is really just a stop-gap measure... */
+			if (G.debug & G_DEBUG) printf("NLA Eval: Stopgap for active action on NLA Stack - no strips case\n");
+
+			animsys_update_action_interp_qt_cache(context, adt->action, ctime, 0, NULL);
+			BLI_freelistN(&time_estrips);
+			return;
+		}
+	}
+
+	if (context->pass == QUAT_INTERP_UPDATE_PASS_TIMES) {
+		/* only continue if there are strips to evaluate */
+		if (BLI_listbase_is_empty(&time_estrips))
+			return;
+
+		/* for each strip, accumulate unified time-points */
+		for (nes = time_estrips.first; nes; nes = nes->next) {
+			nlastrip_update_interp_qt_cache(context, NULL, nes);
+		}
+
+		/* free temporary evaluation data that's not used elsewhere */
+		BLI_freelistN(&time_estrips);
+	}
+	else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES2) {
+		float quats[4][4] = {{0}}; /* channel-major, not time-major */
+		for (int i = 1; i <= 2; ++i) {
+			/* only continue if there are strips to evaluate */
+			if (BLI_listbase_is_empty(&val_estrips[i]))
+				continue;
+
+			/* for each strip, evaluate then accumulate on top of existing channels, but don't set values yet */
+			ListBase echannels = {NULL, NULL};
+			for (nes = val_estrips[i].first; nes; nes = nes->next) {
+				/* ensure target eval-time is set within strip */
+				nlastrip_evaluate_controls(nes->strip, nes->strip_ctime);
+
+				/* evaluate within strip */
+				nlastrip_evaluate(context->ptr, &echannels, NULL, nes);
+
+				/* restore previous eval-time within strip */
+				nlastrip_evaluate_controls(nes->strip, nes->prev_strip_ctime);
+			}
+
+			/* obtain each quaternion component's value */
+			for (NlaEvalChannel *echan = echannels.first; echan; echan = echan->next) {
+				if (!strcmp(RNA_property_identifier(echan->prop), "rotation_quaternion")) {
+					if (((unsigned)echan->index) > 3u)
+						continue;
+					quats[echan->index][i] = echan->value;
+				}
+			}
+
+			/* free temporary evaluation data that's not used elsewhere */
+			BLI_freelistN(&val_estrips[i]);
+			BLI_freelistN(&echannels);
+		}
+
+		/* apply ordered data to quaternion cache */
+		for (int c = 0; c <= 3; ++c)
+			animsys_update_echannels_interp_qt_cache(context, c, quats[c]);
+	}
+	else if (context->pass == QUAT_INTERP_UPDATE_PASS_VALUES4) {
+		float quats[4][4] = {{0}}; /* channel-major, not time-major */
+		for (int i = 0; i <= 3; ++i) {
+			/* only continue if there are strips to evaluate */
+			if (BLI_listbase_is_empty(&val_estrips[i]))
+				continue;
+
+			/* for each strip, evaluate then accumulate on top of existing channels, but don't set values yet */
+			ListBase echannels = {NULL, NULL};
+			for (nes = val_estrips[i].first; nes; nes = nes->next) {
+				/* ensure target eval-time is set within strip */
+				nlastrip_evaluate_controls(nes->strip, nes->strip_ctime);
+
+				/* evaluate within strip */
+				nlastrip_evaluate(context->ptr, &echannels, NULL, nes);
+
+				/* restore previous eval-time within strip */
+				nlastrip_evaluate_controls(nes->strip, nes->prev_strip_ctime);
+			}
+
+			/* obtain each quaternion component's value */
+			for (NlaEvalChannel *echan = echannels.first; echan; echan = echan->next) {
+				if (!strcmp(RNA_property_identifier(echan->prop), "rotation_quaternion")) {
+					if (((unsigned)echan->index) > 3u)
+						continue;
+					quats[echan->index][i] = echan->value;
+				}
+			}
+
+			/* free temporary evaluation data that's not used elsewhere */
+			BLI_freelistN(&val_estrips[i]);
+			BLI_freelistN(&echannels);
+		}
+
+		/* apply ordered data to quaternion cache */
+		for (int c = 0; c <= 3; ++c)
+			animsys_update_echannels_interp_qt_cache(context, c, quats[c]);
+	}
+
+}
+
+/* main interpolation update entry point, follows same flow as animsys_evaluate_* functions
+ * - exclusively focuses on rotation F-Curves, composing the entire stack of NlaStrips together
+ * - 2/4 surrounding time-points (with at least one quaternion BezTriple) are found and evaluated
+ *   across 2 passes of the NLA data (time-selection, then evaluation)
+ */
+static float animsys_update_interp_qt_cache(QuaternionInterpCache *quat_cache, Object *ob, bPoseChannel *pchan,
+											AnimData *adt, PointerRNA *ptr, float ctime, bool four_quats)
+{
+	/* time-selection pass */
+	QuaternionInterpUpdateContext context;
+	context.pass = QUAT_INTERP_UPDATE_PASS_TIMES;
+	context.evaltime = ctime;
+	context.times[0] = -FLT_MAX;
+	context.times[1] = -FLT_MAX;
+	context.times[2] = FLT_MAX;
+	context.times[3] = FLT_MAX;
+	context.quat_cache = quat_cache;
+	context.ob = ob;
+	context.pchan = pchan;
+	context.ptr = ptr;
+
+	if ((adt->nla_tracks.first) && !(adt->flag & ADT_NLA_EVAL_OFF))
+		animsys_update_nla_interp_qt_cache(&context, adt, ctime);
+	else if (adt->action)
+		animsys_update_action_interp_qt_cache(&context, adt->action, ctime, 0, NULL);
+
+	if (context.times[1] == -FLT_MAX && context.times[2] == FLT_MAX) {
+		/* not enough animation data at requested time */
+		return -FLT_MAX;
+	}
+	else if (context.times[1] == -FLT_MAX) {
+		context.times[1] = context.times[2];
+	}
+	else if (context.times[2] == FLT_MAX) {
+		context.times[2] = context.times[1];
+	}
+
+	/* evaluation pass */
+	context.pass = four_quats ? QUAT_INTERP_UPDATE_PASS_VALUES4 : QUAT_INTERP_UPDATE_PASS_VALUES2;
+
+	if ((adt->nla_tracks.first) && !(adt->flag & ADT_NLA_EVAL_OFF))
+		animsys_update_nla_interp_qt_cache(&context, adt, ctime);
+	else if (adt->action)
+		animsys_update_action_interp_qt_cache(&context, adt->action, ctime, 0, NULL);
+
+	if (context.quat_cache->eval_ctime != ctime) {
+		/* normalize quats here */
+		normalize_qt(context.quat_cache->quats[1].quat);
+		normalize_qt(context.quat_cache->quats[2].quat);
+		if (four_quats) {
+			if (context.times[0] != -FLT_MAX)
+				normalize_qt(context.quat_cache->quats[0].quat);
+			else
+				copy_qt_qt(context.quat_cache->quats[0].quat, context.quat_cache->quats[1].quat);
+
+			if (context.times[3] != FLT_MAX)
+				normalize_qt(context.quat_cache->quats[3].quat);
+			else
+				copy_qt_qt(context.quat_cache->quats[3].quat, context.quat_cache->quats[2].quat);
+		}
+		context.quat_cache->eval_ctime = ctime;
+		context.quat_cache->quats[0].ctime = context.times[0];
+		context.quat_cache->quats[1].ctime = context.times[1];
+		context.quat_cache->quats[2].ctime = context.times[2];
+		context.quat_cache->quats[3].ctime = context.times[3];
+	}
+
+	if (fabsf(context.times[2] - context.times[1]) < 0.0001)
+		return 0.f;
+	return (ctime - context.times[1]) / (context.times[2] - context.times[1]);
+}
+
+/* Initialize cache as invalid */
+void BKE_animsys_invalidate_quat_interp_cache(QuaternionInterpCache *quat_cache)
+{
+	quat_cache->eval_ctime = -FLT_MAX;
+	quat_cache->quats[0].ctime = FLT_MAX;
+	quat_cache->quats[1].ctime = FLT_MAX;
+	quat_cache->quats[2].ctime = FLT_MAX;
+	quat_cache->quats[3].ctime = FLT_MAX;
+}
+
+/* Create quaternion cache within Object if needed */
+static QuaternionInterpCache *ensure_object_quat_cache(Object *obj)
+{
+	if (obj->quat_cache)
+		return obj->quat_cache;
+
+	obj->quat_cache = MEM_callocN(sizeof(QuaternionInterpCache), "QuaternionInterpCache");
+	BKE_animsys_invalidate_quat_interp_cache(obj->quat_cache);
+	return obj->quat_cache;
+}
+
+/* Create quaternion cache within PoseChannel if needed */
+static QuaternionInterpCache *ensure_pchan_quat_cache(bPoseChannel *pchan)
+{
+	if (pchan->quat_cache)
+		return pchan->quat_cache;
+
+	pchan->quat_cache = MEM_callocN(sizeof(QuaternionInterpCache), "QuaternionInterpCache");
+	BKE_animsys_invalidate_quat_interp_cache(pchan->quat_cache);
+	return pchan->quat_cache;
+}
+
+/* Performs spherical-linear interpolation using Object/PoseChannel AnimData at specified time
+ * - only performs evaluation on BezTriple instances composed from the entire NLA stack / active action
+ */
+void BKE_animsys_interp_qt_slerp(float quat_out[4], Object *ob, bPoseChannel *pchan, float ctime, bool delta_quat)
+{
+	/* find quaternion property */
+	PointerRNA id_ptr, ptr;
+	PropertyRNA *prop = NULL;
+	QuaternionInterpCache *quat_cache;
+
+	if (pchan) {
+		RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &id_ptr);
+		quat_cache = ensure_pchan_quat_cache(pchan);
+	}
+	else if (ob) {
+		RNA_id_pointer_create((ID *)ob, &id_ptr);
+		quat_cache = ensure_object_quat_cache(ob);
+	}
+	else {
+		/* return identity as failsafe */
+		unit_qt(quat_out);
+		return;
+	}
+
+	const char* path = delta_quat ? "rotation_quaternion_delta" : "rotation_quaternion";
+
+	if (RNA_path_resolve_property(&id_ptr, path, &ptr, &prop)) {
+		if (ob->adt) {
+			/* process cache */
+			float t = animsys_update_interp_qt_cache(quat_cache, ob, pchan, ob->adt, &ptr, ctime, false);
+
+			if (t == -FLT_MAX) {
+				/* not enough animation data, fallback to direct property fetch */
+				RNA_property_float_get_array(&ptr, prop, quat_out);
+				return;
+			}
+
+			/* full quaternion interpolation here */
+			interp_qt_qtqt(quat_out, quat_cache->quats[1].quat, quat_cache->quats[2].quat, t);
+
+		} else {
+			/* fallback to normally-interpolated property fetch */
+			RNA_property_float_get_array(&ptr, prop, quat_out);
+		}
+		return;
+	}
+
+	/* return identity as failsafe */
+	unit_qt(quat_out);
+}
+
+/* Performs spherical-quadrangle interpolation using Object/PoseChannel AnimData at specified time
+ * - only performs evaluation on BezTriple instances composed from the entire NLA stack / active action
+ */
+void BKE_animsys_interp_qt_squad(float quat_out[4], Object *ob, bPoseChannel *pchan, float ctime, bool delta_quat)
+{
+	/* find quaternion property */
+	PointerRNA id_ptr, ptr;
+	PropertyRNA *prop = NULL;
+	QuaternionInterpCache *quat_cache;
+
+	if (pchan) {
+		RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &id_ptr);
+		quat_cache = ensure_pchan_quat_cache(pchan);
+	}
+	else if (ob) {
+		RNA_id_pointer_create((ID *)ob, &id_ptr);
+		quat_cache = ensure_object_quat_cache(ob);
+	}
+	else {
+		/* return identity as failsafe */
+		unit_qt(quat_out);
+		return;
+	}
+
+	const char* path = delta_quat ? "rotation_quaternion_delta" : "rotation_quaternion";
+
+	if (RNA_path_resolve_property(&id_ptr, path, &ptr, &prop)) {
+		if (ob->adt) {
+			/* process cache */
+			float t = animsys_update_interp_qt_cache(quat_cache, ob, pchan, ob->adt, &ptr, ctime, true);
+
+			if (t == -FLT_MAX) {
+				/* not enough animation data, fallback to direct property fetch */
+				RNA_property_float_get_array(&ptr, prop, quat_out);
+				return;
+			}
+
+			/* full quaternion interpolation here */
+			interp_qt_qtqtqtqt(quat_out,
+							   quat_cache->quats[0].quat, quat_cache->quats[1].quat,
+							   quat_cache->quats[2].quat, quat_cache->quats[3].quat, t);
+		}
+		else {
+			/* fallback to direct property fetch */
+			RNA_property_float_get_array(&ptr, prop, quat_out);
+		}
+		return;
+	}
+
+	/* return identity as failsafe */
+	unit_qt(quat_out);
+}
 
 /* ************** */
 /* Evaluation API */

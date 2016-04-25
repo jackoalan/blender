@@ -2976,10 +2976,9 @@ static void animsys_update_action_interp_qt_cache(QuaternionInterpUpdateContext 
 								if (fabsf(context->times[i]) == FLT_MAX)
 									continue;
 								/* cache-test (true return didn't write 0.f value) */
-								/*
 								if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
 															   fcu->array_index, context->times[i], 0.f))
-									continue;*/
+									continue;
 								float eval_time = context->times[i];
 								if (strip)
 									eval_time = nlastrip_get_frame(strip, context->times[i], NLATIME_CONVERT_EVAL);
@@ -2993,10 +2992,9 @@ static void animsys_update_action_interp_qt_cache(QuaternionInterpUpdateContext 
 								if (fabsf(context->times[i]) == FLT_MAX)
 									continue;
 								/* cache-test (true return didn't write 0.f value) */
-								/*
 								if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
 															   fcu->array_index, context->times[i], 0.f))
-									continue;*/
+									continue;
 								float eval_time = context->times[i];
 								if (strip)
 									eval_time = nlastrip_get_frame(strip, context->times[i], NLATIME_CONVERT_EVAL);

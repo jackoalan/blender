@@ -3060,10 +3060,6 @@ static void animsys_update_echannels_interp_qt_cache(QuaternionInterpUpdateConte
 			for (int i = 1; i <= 2; ++i) { /* forward-cache */
 				if (fabsf(context->times[i]) == FLT_MAX)
 					continue;
-				/* cache-test (true return didn't write 0.f value) */
-				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
-											   index, context->times[i], 0.f))
-					continue;
 				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
 										   index, context->times[i], values[i]);
 			}
@@ -3071,10 +3067,6 @@ static void animsys_update_echannels_interp_qt_cache(QuaternionInterpUpdateConte
 		else {
 			for (int i = 2; i >= 1; --i) { /* reverse-cache */
 				if (fabsf(context->times[i]) == FLT_MAX)
-					continue;
-				/* cache-test (true return didn't write 0.f value) */
-				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
-											   index, context->times[i], 0.f))
 					continue;
 				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
 										   index, context->times[i], values[i]);
@@ -3087,10 +3079,6 @@ static void animsys_update_echannels_interp_qt_cache(QuaternionInterpUpdateConte
 			for (int i = 0; i <= 3; ++i) { /* forward-cache */
 				if (fabsf(context->times[i]) == FLT_MAX)
 					continue;
-				/* cache-test (true return didn't write 0.f value) */
-				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
-											   index, context->times[i], 0.f))
-					continue;
 				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
 										   index, context->times[i], values[i]);
 			}
@@ -3098,10 +3086,6 @@ static void animsys_update_echannels_interp_qt_cache(QuaternionInterpUpdateConte
 		else {
 			for (int i = 3; i >= 0; --i) { /* reverse-cache */
 				if (fabsf(context->times[i]) == FLT_MAX)
-					continue;
-				/* cache-test (true return didn't write 0.f value) */
-				if (accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
-											   index, context->times[i], 0.f))
 					continue;
 				accumulate_interp_qt_cache(context->quat_cache, context->evaltime, i,
 										   index, context->times[i], values[i]);

@@ -2199,10 +2199,10 @@ static void rna_def_object(BlenderRNA *brna)
 		{ROT_MODE_AXISANGLE, "AXIS_ANGLE", 0, "Axis Angle",
 		                     "Axis Angle (W+XYZ), defines a rotation around some axis defined by 3D-Vector"},
 		{ROT_MODE_QUAT_SLERP, "QUATERNION_SLERP", 0, "Quaternion (SLERP)",
-							  "Uses control keyframes to directly-interpolate between discrete rotational poses"},
+							  "Uses action keyframes to directly-interpolate between discrete rotational poses"},
 		{ROT_MODE_QUAT_SQUAD, "QUATERNION_SQUAD", 0, "Quaternion (SQUAD)",
-							  "Uses control keyframes to directly-interpolate between discrete rotational poses, "
-							  "smoothed using quadratic spline"},
+							  "Uses action keyframes to directly-interpolate between discrete rotational poses, "
+							  "smoothed using spherical-quadrangle interpolation"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	

@@ -2793,13 +2793,13 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 	FCurve *strip_time_fcu = NULL;
 	if (strip && (strip->flag & NLASTRIP_FLAG_USR_TIME) != 0) {
 		/* calculate then execute each curve */
-		for (FCurve *fcu = strip->fcurves.first; fcu; fcu = fcu->next) {
+		for (FCurve *strip_fcu = strip->fcurves.first; strip_fcu; strip_fcu = strip_fcu->next) {
 			/* check if this F-Curve doesn't belong to a muted group */
-			if ((fcu->grp == NULL) || (fcu->grp->flag & AGRP_MUTED) == 0) {
+			if ((strip_fcu->grp == NULL) || (strip_fcu->grp->flag & AGRP_MUTED) == 0) {
 				/* check if this curve should be skipped */
-				if ((fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
-					if (!strcmp(fcu->rna_path, "strip_time")) {
-						strip_time_fcu = fcu;
+				if ((strip_fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
+					if (!strcmp(strip_fcu->rna_path, "strip_time")) {
+						strip_time_fcu = strip_fcu;
 						break;
 					}
 				}
@@ -2812,8 +2812,7 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 	prevbezt = bezts;
 	bezt = prevbezt + 1;
 	lastbezt = prevbezt + a;
-	float mapped_prevbezt;
-	float mapped_lastbezt;
+	float mapped_prevbezt, mapped_lastbezt, mapped_bezt;
 
 	/* evaluation time at or past endpoints? */
 	if ((mapped_prevbezt = resolve_strip_time(strip_time_fcu, strip, prevbezt->vec[1][0])) >= evaltime) {
@@ -2861,7 +2860,7 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 			prevbezt = (a > 0) ? (bezt - 1) : bezt;
 		}
 
-		float mapped_prevbezt = resolve_strip_time(strip_time_fcu, strip, prevbezt->vec[1][0]);
+		mapped_prevbezt = resolve_strip_time(strip_time_fcu, strip, prevbezt->vec[1][0]);
 		inside_strip = true;
 		if (nes) mapped_prevbezt = nlastrip_map_evaltime_cycle(nes, mapped_prevbezt, evalcycle, &inside_strip);
 		if (inside_strip && mapped_prevbezt > interp[1]) {
@@ -2869,7 +2868,7 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 			interp[1] = mapped_prevbezt;
 		}
 
-		float mapped_bezt = resolve_strip_time(strip_time_fcu, strip, bezt->vec[1][0]);
+		mapped_bezt = resolve_strip_time(strip_time_fcu, strip, bezt->vec[1][0]);
 		inside_strip = true;
 		if (nes) mapped_bezt = nlastrip_map_evaltime_cycle(nes, mapped_bezt, evalcycle, &inside_strip);
 		if (inside_strip && mapped_bezt < interp[2]) {

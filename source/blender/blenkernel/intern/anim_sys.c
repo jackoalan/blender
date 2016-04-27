@@ -3399,8 +3399,13 @@ static void animsys_update_nla_interp_qt_cache(QuaternionInterpUpdateContext *co
 				/* ensure target eval-time is set within strip */
 				nlastrip_evaluate_controls(nes->strip, nes->strip_ctime);
 
+				/* evaluate nlastrips from object's scope, not pose channel's */
+				PointerRNA ob_ptr;
+				if (context->pchan)
+					RNA_id_pointer_create((ID *)context->ob, &ob_ptr);
+
 				/* evaluate within strip */
-				nlastrip_evaluate(context->ptr, &echannels, NULL, nes);
+				nlastrip_evaluate(context->pchan ? &ob_ptr : context->ptr, &echannels, NULL, nes);
 
 				/* restore previous eval-time within strip */
 				nlastrip_evaluate_controls(nes->strip, nes->prev_strip_ctime);
@@ -3408,7 +3413,8 @@ static void animsys_update_nla_interp_qt_cache(QuaternionInterpUpdateContext *co
 
 			/* obtain each quaternion component's value */
 			for (NlaEvalChannel *echan = echannels.first; echan; echan = echan->next) {
-				if (!strcmp(RNA_property_identifier(echan->prop), "rotation_quaternion")) {
+				if (echan->ptr.data == context->ptr->data && /* match exact pose channel */
+					!strcmp(RNA_property_identifier(echan->prop), "rotation_quaternion")) {
 					if (((unsigned)echan->index) > 3u)
 						continue;
 					quats[echan->index][i] = echan->value;
@@ -3437,8 +3443,13 @@ static void animsys_update_nla_interp_qt_cache(QuaternionInterpUpdateContext *co
 				/* ensure target eval-time is set within strip */
 				nlastrip_evaluate_controls(nes->strip, nes->strip_ctime);
 
+				/* evaluate nlastrips from object's scope, not pose channel's */
+				PointerRNA ob_ptr;
+				if (context->pchan)
+					RNA_id_pointer_create((ID *)context->ob, &ob_ptr);
+
 				/* evaluate within strip */
-				nlastrip_evaluate(context->ptr, &echannels, NULL, nes);
+				nlastrip_evaluate(context->pchan ? &ob_ptr : context->ptr, &echannels, NULL, nes);
 
 				/* restore previous eval-time within strip */
 				nlastrip_evaluate_controls(nes->strip, nes->prev_strip_ctime);
@@ -3446,7 +3457,8 @@ static void animsys_update_nla_interp_qt_cache(QuaternionInterpUpdateContext *co
 
 			/* obtain each quaternion component's value */
 			for (NlaEvalChannel *echan = echannels.first; echan; echan = echan->next) {
-				if (!strcmp(RNA_property_identifier(echan->prop), "rotation_quaternion")) {
+				if (echan->ptr.data == context->ptr->data && /* match exact pose channel */
+					!strcmp(RNA_property_identifier(echan->prop), "rotation_quaternion")) {
 					if (((unsigned)echan->index) > 3u)
 						continue;
 					quats[echan->index][i] = echan->value;

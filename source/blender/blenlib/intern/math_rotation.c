@@ -812,7 +812,7 @@ static void calc_quadrangle(float q[4], const float a[4], const float b[4], cons
 	mul_qt_qtqt(q, b, q3Exp);
 }
 
-/* SQUAD - spherical/quadrangle interpolation of five sequential quaternions
+/* SQUAD - spherical/quadrangle interpolation of four sequential quaternions
  * Interpolation occurs between quat2 and quat3.
  */
 void interp_qt_qtqtqtqt(float result[4], const float quat1[4], const float quat2[4],

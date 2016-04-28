@@ -1507,7 +1507,7 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 		for (int c = 0; c <= 3; ++c) {
 			if (found_curves[c] == NULL)
 				continue;
-			find_fcurve_interp_qt_times(interp, found_curves[c], rt, 0, NULL);
+			find_fcurve_interp_qt_times(interp, found_curves[c], rt);
 		}
 
 		/* ensure evaluation region is complete */

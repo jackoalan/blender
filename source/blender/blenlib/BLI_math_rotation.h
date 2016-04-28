@@ -75,7 +75,7 @@ bool is_zero_qt(const float q[4]);
 /* interpolation */
 void interp_dot_slerp(const float t, const float cosom, float w[2]);
 void interp_qt_qtqt(float q[4], const float a[4], const float b[4], const float t);
-void interp_qt_qtqt_no_invert(float q[4], const float a[4], const float b[4], const float t);
+void interp_qt_qtqt_no_flip(float q[4], const float a[4], const float b[4], const float t);
 void interp_qt_qtqtqtqt(float q[4], const float a[4], const float b[4],
 						const float c[4], const float d[4], const float t);
 void add_qt_qtqt(float q[4], const float a[4], const float b[4], const float t);

@@ -609,8 +609,6 @@ typedef struct NlaStrip {
 
 	float influence;            /* Influence of strip */
 	float strip_time;           /* Current 'time' within action being used (automatically evaluated, but can be overridden) */
-	float strip_ctime;			/* Current global 'time' to evaluate this strip */
-	float pad0;
 
 	float start, end;           /* extents of the strip */
 	float actstart, actend;     /* range of the action to use */

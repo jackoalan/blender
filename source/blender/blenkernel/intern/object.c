@@ -472,7 +472,7 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 
 	/* Free quaternion interpolation cache */
 	if (ob->quat_cache)
-		MEM_freeN(ob->quat_cache);
+		BKE_animsys_free_quat_interp_cache(ob->quat_cache);
 
 	BKE_previewimg_free(&ob->preview);
 }

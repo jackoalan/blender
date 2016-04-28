@@ -203,8 +203,11 @@ void animsys_evaluate_action_group(struct PointerRNA *ptr, struct bAction *act, 
  * defined in AnimData to control the interpolation points.
  */
 
-/* Initialize cache as invalid */
+/* Initialize entire interpolation cache as invalid */
 void BKE_animsys_invalidate_quat_interp_cache(struct QuaternionInterpCache *quat_cache);
+
+/* Free entire interpolation cache, including itself */
+void BKE_animsys_free_quat_interp_cache(struct QuaternionInterpCache *quat_cache);
 
 /* Performs spherical-linear interpolation using Object/PoseChannel AnimData at specified time */
 void BKE_animsys_interp_qt_slerp(float quat_out[4], struct Object *ob, struct bPoseChannel *pchan, float ctime, bool delta_quat);

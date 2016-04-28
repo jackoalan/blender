@@ -59,13 +59,9 @@
 #include "BKE_context.h"
 #include "BKE_curve.h" 
 #include "BKE_global.h"
-#include "BKE_nla.h"
 #include "BKE_object.h"
 
 #include "RNA_access.h"
-
-/* for nlastrip_get_frame */
-#include "nla_private.h"
 
 #ifdef WITH_PYTHON
 #include "BPY_extern.h" 
@@ -503,96 +499,6 @@ int binarysearch_bezt_index(BezTriple array[], float frame, int arraylen, bool *
 {
 	/* this is just a wrapper which uses the default threshold */
 	return binarysearch_bezt_index_ex(array, frame, arraylen, BEZT_BINARYSEARCH_THRESH, r_replace);
-}
-
-/* quick, non-clobbering evaluation of strip_time fcurve for repositioning BezTriples
- * when finding interpolation points */
-static float resolve_strip_time(FCurve *strip_time_fcu, NlaStrip *strip, float evaltime)
-{
-	if (strip_time_fcu == NULL)
-		return evaltime;
-	evaltime = evaluate_fcurve(strip_time_fcu, evaltime);
-	if ((strip->flag & NLASTRIP_FLAG_USR_TIME_CYCLIC) != 0)
-		evaltime = fmodf(evaltime - strip->actstart, strip->actend - strip->actstart);
-	return evaltime;
-}
-
-/* Binary search algorithm for finding where to insert BezTriple, with optional argument for precision required.
- * Returns the index to insert at (data already at that index will be offset if replace is 0)
- * - This version resolves all time positions using the 'strip_time' F-Curve before comparing
- */
-static int binarysearch_bezt_index_anim_strip_time(FCurve *strip_time_fcu, NlaStrip *strip, BezTriple array[],
-												   float frame, int arraylen, float threshold, bool *r_replace)
-{
-	int start = 0, end = arraylen;
-	int loopbreaker = 0, maxloop = arraylen * 2;
-
-	/* initialize replace-flag first */
-	*r_replace = false;
-
-	/* sneaky optimizations (don't go through searching process if...):
-	 *	- keyframe to be added is to be added out of current bounds
-	 *	- keyframe to be added would replace one of the existing ones on bounds
-	 */
-	if ((arraylen <= 0) || (array == NULL)) {
-		printf("Warning: binarysearch_bezt_index() encountered invalid array\n");
-		return 0;
-	}
-	else {
-		/* check whether to add before/after/on */
-		float framenum;
-
-		/* 'First' Keyframe (when only one keyframe, this case is used) */
-		framenum = resolve_strip_time(strip_time_fcu, strip, array[0].vec[1][0]);
-		if (IS_EQT(frame, framenum, threshold)) {
-			*r_replace = true;
-			return 0;
-		}
-		else if (frame < framenum)
-			return 0;
-
-		/* 'Last' Keyframe */
-		framenum = resolve_strip_time(strip_time_fcu, strip, array[(arraylen - 1)].vec[1][0]);
-		if (IS_EQT(frame, framenum, threshold)) {
-			*r_replace = true;
-			return (arraylen - 1);
-		}
-		else if (frame > framenum)
-			return arraylen;
-	}
-
-
-	/* most of the time, this loop is just to find where to put it
-	 * 'loopbreaker' is just here to prevent infinite loops
-	 */
-	for (loopbreaker = 0; (start <= end) && (loopbreaker < maxloop); loopbreaker++) {
-		/* compute and get midpoint */
-		int mid = start + ((end - start) / 2);  /* we calculate the midpoint this way to avoid int overflows... */
-		float midfra = resolve_strip_time(strip_time_fcu, strip, array[mid].vec[1][0]);
-
-		/* check if exactly equal to midpoint */
-		if (IS_EQT(frame, midfra, threshold)) {
-			*r_replace = true;
-			return mid;
-		}
-
-		/* repeat in upper/lower half */
-		if (frame > midfra)
-			start = mid + 1;
-		else if (frame < midfra)
-			end = mid - 1;
-	}
-
-	/* print error if loop-limit exceeded */
-	if (loopbreaker == (maxloop - 1)) {
-		printf("Error: binarysearch_bezt_index() was taking too long\n");
-
-		/* include debug info */
-		printf("\tround = %d: start = %d, end = %d, arraylen = %d\n", loopbreaker, start, end, arraylen);
-	}
-
-	/* not found, so return where to place it */
-	return start;
 }
 
 /* ...................................... */
@@ -2779,56 +2685,29 @@ void calculate_fcurve(FCurve *fcu, float ctime)
 }
 
 /* Search for 4 explicitly-keyframed time-points surrounding given time  */
-static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, BezTriple *bezts,
-												  float evaltime, int evalcycle, NlaEvalStrip *nes)
+static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, BezTriple *bezts, float evaltime)
 {
 	/* Note: keep in sync with fcurve_eval_keyframes */
 	BezTriple *bezt, *prevbezt, *lastbezt;
 	unsigned int a;
-	bool inside_strip;
-	NlaStrip *strip = NULL;
-	if (nes) strip = nes->strip;
-
-	/* get strip_time F-Curve if present */
-	FCurve *strip_time_fcu = NULL;
-	if (strip && (strip->flag & NLASTRIP_FLAG_USR_TIME) != 0) {
-		/* calculate then execute each curve */
-		for (FCurve *strip_fcu = strip->fcurves.first; strip_fcu; strip_fcu = strip_fcu->next) {
-			/* check if this F-Curve doesn't belong to a muted group */
-			if ((strip_fcu->grp == NULL) || (strip_fcu->grp->flag & AGRP_MUTED) == 0) {
-				/* check if this curve should be skipped */
-				if ((strip_fcu->flag & (FCURVE_MUTED | FCURVE_DISABLED)) == 0) {
-					if (!strcmp(strip_fcu->rna_path, "strip_time")) {
-						strip_time_fcu = strip_fcu;
-						break;
-					}
-				}
-			}
-		}
-	}
 
 	/* get pointers */
 	a = fcu->totvert - 1;
 	prevbezt = bezts;
 	bezt = prevbezt + 1;
 	lastbezt = prevbezt + a;
-	float mapped_prevbezt, mapped_lastbezt, mapped_bezt;
 
 	/* evaluation time at or past endpoints? */
-	if ((mapped_prevbezt = resolve_strip_time(strip_time_fcu, strip, prevbezt->vec[1][0])) >= evaltime) {
-		inside_strip = true;
-		if (nes) mapped_prevbezt = nlastrip_map_evaltime_cycle(nes, mapped_prevbezt, evalcycle, &inside_strip);
-		if (inside_strip && mapped_prevbezt < interp[2]) {
+	if (prevbezt->vec[1][0] >= evaltime) {
+		if (prevbezt->vec[1][0] < interp[2]) {
 			interp[3] = interp[2];
-			interp[2] = mapped_prevbezt;
+			interp[2] = prevbezt->vec[1][0];
 		}
 	}
-	else if ((mapped_lastbezt = resolve_strip_time(strip_time_fcu, strip, lastbezt->vec[1][0])) <= evaltime) {
-		inside_strip = true;
-		if (nes) mapped_lastbezt = nlastrip_map_evaltime_cycle(nes, mapped_lastbezt, evalcycle, &inside_strip);
-		if (inside_strip && mapped_lastbezt > interp[1]) {
+	else if (lastbezt->vec[1][0] <= evaltime) {
+		if (lastbezt->vec[1][0] > interp[1]) {
 			interp[0] = interp[1];
-			interp[1] = mapped_lastbezt;
+			interp[1] = lastbezt->vec[1][0];
 		}
 	}
 	else {
@@ -2842,7 +2721,7 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 		 *    - 0.00001 is too fine     -> Weird errors, like selecting the wrong keyframe range (see T39207), occur.
 		 *                                 This lower bound was established in b888a32eee8147b028464336ad2404d8155c64dd
 		 */
-		a = binarysearch_bezt_index_anim_strip_time(strip_time_fcu, strip, bezts, evaltime, fcu->totvert, 0.0001, &exact);
+		a = binarysearch_bezt_index_ex(bezts, evaltime, fcu->totvert, 0.0001, &exact);
 		if (G.debug & G_DEBUG) printf("find fcurve interp points '%s' - %f => %u/%u, %d\n", fcu->rna_path, evaltime, a, fcu->totvert, exact);
 
 		if (exact) {
@@ -2860,27 +2739,20 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 			prevbezt = (a > 0) ? (bezt - 1) : bezt;
 		}
 
-		mapped_prevbezt = resolve_strip_time(strip_time_fcu, strip, prevbezt->vec[1][0]);
-		inside_strip = true;
-		if (nes) mapped_prevbezt = nlastrip_map_evaltime_cycle(nes, mapped_prevbezt, evalcycle, &inside_strip);
-		if (inside_strip && mapped_prevbezt > interp[1]) {
+		if (prevbezt->vec[1][0] > interp[1]) {
 			interp[0] = interp[1];
-			interp[1] = mapped_prevbezt;
+			interp[1] = prevbezt->vec[1][0];
 		}
 
-		mapped_bezt = resolve_strip_time(strip_time_fcu, strip, bezt->vec[1][0]);
-		inside_strip = true;
-		if (nes) mapped_bezt = nlastrip_map_evaltime_cycle(nes, mapped_bezt, evalcycle, &inside_strip);
-		if (inside_strip && mapped_bezt < interp[2]) {
+		if (bezt->vec[1][0] < interp[2]) {
 			interp[3] = interp[2];
-			interp[2] = mapped_bezt;
+			interp[2] = bezt->vec[1][0];
 		}
 	}
 }
 
 /* find 4 interpolation time-points surrounding given time */
-void find_fcurve_interp_qt_times(float interp[4], struct FCurve *fcu, float evaltime,
-								 int evalcycle, NlaEvalStrip *nes)
+void find_fcurve_interp_qt_times(float interp[4], struct FCurve *fcu, float evaltime)
 {
 	/* Note: keep in sync with evaluate_fcurve */
 
@@ -2934,7 +2806,7 @@ void find_fcurve_interp_qt_times(float interp[4], struct FCurve *fcu, float eval
 	 *	  F-Curve modifier on the stack requested the curve to be evaluated at
 	 */
 	if (fcu->bezt)
-		find_fcurve_interp_qt_times_keyframes(interp, fcu, fcu->bezt, devaltime, evalcycle, nes);
+		find_fcurve_interp_qt_times_keyframes(interp, fcu, fcu->bezt, devaltime);
 
 	evaluate_fmodifiers_storage_free(storage);
 }

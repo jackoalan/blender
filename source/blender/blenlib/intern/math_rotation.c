@@ -770,7 +770,7 @@ void interp_qt_qtqt(float result[4], const float quat1[4], const float quat2[4],
 	result[3] = w[0] * quat[3] + w[1] * quat2[3];
 }
 
-void interp_qt_qtqt_no_invert(float result[4], const float quat1[4], const float quat2[4], const float t)
+void interp_qt_qtqt_no_flip(float result[4], const float quat1[4], const float quat2[4], const float t)
 {
 	float cosom, w[2];
 
@@ -844,12 +844,12 @@ void interp_qt_qtqtqtqt(float result[4], const float quat1[4], const float quat2
 	calc_quadrangle(q2, quats_shortened[1], quats_shortened[2], quats_in[3]);
 
 	float q3[4];
-	interp_qt_qtqt_no_invert(q3, quats_shortened[1], quats_shortened[2], t);
+	interp_qt_qtqt_no_flip(q3, quats_shortened[1], quats_shortened[2], t);
 
 	float q4[4];
-	interp_qt_qtqt_no_invert(q4, q1, q2, t);
+	interp_qt_qtqt_no_flip(q4, q1, q2, t);
 
-	interp_qt_qtqt_no_invert(result, q3, q4, 2.f * t * (1.f - t));
+	interp_qt_qtqt_no_flip(result, q3, q4, 2.f * t * (1.f - t));
 	normalize_qt(result);
 }
 

@@ -796,7 +796,7 @@ void BKE_pose_channel_free_ex(bPoseChannel *pchan, bool do_id_user)
 	}
 
 	if (pchan->quat_cache)
-		MEM_freeN(pchan->quat_cache);
+		BKE_animsys_free_quat_interp_cache(pchan->quat_cache);
 }
 
 void BKE_pose_channel_free(bPoseChannel *pchan)

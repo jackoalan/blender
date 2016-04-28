@@ -3202,7 +3202,7 @@ static void nlastrip_update_interp_qt_cache_transition(QuaternionInterpUpdateCon
 	nlastrip_update_interp_qt_cache(context, &tmp_modifiers, &tmp_nes, quat2);
 
 	/* interpolate quaternions according to transition influence */
-	interp_qt_qtqt(quat_out, quat1, quat2, tmp_nes.strip->strip_time);
+	interp_qt_qtqt(quat_out, quat1, quat2, nes->strip->strip_time);
 
 	/* unlink this strip's modifiers from the parent's modifiers again */
 	nlaeval_fmodifiers_split_stacks(&nes->strip->modifiers, modifiers);

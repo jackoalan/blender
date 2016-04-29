@@ -490,7 +490,7 @@ object's movement caused by this constraint"""
 
             ob.keyframe_insert("location")
 
-            if ob.rotation_mode == 'QUATERNION':
+            if ob.rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
                 ob.keyframe_insert("rotation_quaternion")
             else:
                 ob.keyframe_insert("rotation_euler")

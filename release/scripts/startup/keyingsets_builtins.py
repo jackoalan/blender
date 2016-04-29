@@ -425,7 +425,7 @@ class BUILTIN_KSI_WholeCharacter(KeyingSetInfo):
     # rotation properties
     def doRot4d(ksi, ks, bone):
         # rotation mode affects the property used
-        if bone.rotation_mode == 'QUATERNION':
+        if bone.rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
             prop = "rotation_quaternion"
         elif bone.rotation_mode == 'AXIS_ANGLE':
             prop = "rotation_axis_angle"
@@ -536,7 +536,7 @@ class BUILTIN_KSI_DeltaRotation(KeyingSetInfo):
 
         # add the property name to the base path
         #   rotation mode affects the property used
-        if data.rotation_mode == 'QUATERNION':
+        if data.rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
             path = keyingsets_utils.path_add_property(base_path, "delta_rotation_quaternion")
         elif data.rotation_mode == 'AXIS_ANGLE':
             # XXX: for now, this is not available yet

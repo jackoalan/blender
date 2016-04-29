@@ -179,7 +179,7 @@ def bake_action(frame_start,
                 pbone.keyframe_insert("location", -1, f, name, options)
 
                 rotation_mode = pbone.rotation_mode
-                if rotation_mode == 'QUATERNION':
+                if rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
                     pbone.keyframe_insert("rotation_quaternion", -1, f, name, options)
                 elif rotation_mode == 'AXIS_ANGLE':
                     pbone.keyframe_insert("rotation_axis_angle", -1, f, name, options)
@@ -212,7 +212,7 @@ def bake_action(frame_start,
             obj.keyframe_insert("location", -1, f, name, options)
 
             rotation_mode = obj.rotation_mode
-            if rotation_mode == 'QUATERNION':
+            if rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
                 obj.keyframe_insert("rotation_quaternion", -1, f, name, options)
             elif rotation_mode == 'AXIS_ANGLE':
                 obj.keyframe_insert("rotation_axis_angle", -1, f, name, options)

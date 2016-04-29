@@ -152,7 +152,7 @@ class BakeToKeyframes(Operator):
                     obj.location = mat.to_translation()
 
                     rot_mode = obj.rotation_mode
-                    if rot_mode == 'QUATERNION':
+                    if rot_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
                         q1 = obj.rotation_quaternion
                         q2 = mat.to_quaternion()
                         # make quaternion compatible with the previous one

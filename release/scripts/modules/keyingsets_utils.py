@@ -180,7 +180,7 @@ def RKS_GEN_rotation(ksi, context, ks, data):
 
     # add the property name to the base path
     #   rotation mode affects the property used
-    if data.rotation_mode == 'QUATERNION':
+    if data.rotation_mode in {'QUATERNION', 'QUATERNION_SLERP', 'QUATERNION_SQUAD'}:
         path = path_add_property(base_path, "rotation_quaternion")
     elif data.rotation_mode == 'AXIS_ANGLE':
         path = path_add_property(base_path, "rotation_axis_angle")

@@ -1952,7 +1952,8 @@ void BKE_object_rot_to_mat3(struct Scene *scene, Object *ob, float mat[3][3], bo
 		/* slerp - direct spherical interpolation */
 		float tquat[4];
 
-		if (scene && (ob->recalc & OB_RECALC_TIME)) {
+		/* only perform interpolation on frame updates (so user may freely edit/key) */
+		if (scene && (ob->recalc & (OB_RECALC_TIME|OB_RECALC_DATA)) == OB_RECALC_TIME) {
 			/* scene-time-sensitive quaternion interpolation */
 			float ctime = BKE_scene_frame_get(scene);
 
@@ -1979,7 +1980,8 @@ void BKE_object_rot_to_mat3(struct Scene *scene, Object *ob, float mat[3][3], bo
 		/* squad - direct spherical-quadrangle interpolation */
 		float tquat[4];
 
-		if (scene && (ob->recalc & OB_RECALC_TIME)) {
+		/* only perform interpolation on frame updates (so user may freely edit/key) */
+		if (scene && (ob->recalc & (OB_RECALC_TIME|OB_RECALC_DATA)) == OB_RECALC_TIME) {
 			/* scene-time-sensitive quaternion interpolation */
 			float ctime = BKE_scene_frame_get(scene);
 

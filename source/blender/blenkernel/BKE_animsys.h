@@ -209,7 +209,7 @@ void BKE_animsys_invalidate_quat_interp_cache(struct QuaternionInterpCache *quat
 /* Initialize contained quaternion interpolation caches as invalid,
  * including PoseChannel caches for Armatures
  */
-void BKE_animsys_invalidate_object_quat_interp_cache(struct Object *ob);
+void BKE_animsys_invalidate_object_quat_interp_caches(struct Object *ob);
 
 /* Free entire interpolation cache, including itself */
 void BKE_animsys_free_quat_interp_cache(struct QuaternionInterpCache *quat_cache);

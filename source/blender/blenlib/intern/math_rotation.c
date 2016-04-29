@@ -789,22 +789,24 @@ void interp_qt_qtqt_no_flip(float result[4], const float quat1[4], const float q
 
 static void calc_quadrangle(float q[4], const float a[4], const float b[4], const float c[4])
 {
+	float qInvA[4];
+	conjugate_qt_qt(qInvA, a);
 	float qInvB[4];
-	invert_qt_qt(qInvB, b);
+	conjugate_qt_qt(qInvB, b);
 
 	float q1[4];
 	float q1Log[4];
-	mul_qt_qtqt(q1, qInvB, c);
+	mul_qt_qtqt(q1, qInvA, b);
 	log_qt_qt(q1Log, q1);
 
 	float q2[4];
 	float q2Log[4];
-	mul_qt_qtqt(q2, qInvB, a);
+	mul_qt_qtqt(q2, qInvB, c);
 	log_qt_qt(q2Log, q2);
 
 	float q3[4];
-	add_v4_v4v4(q3, q1Log, q2Log);
-	mul_v4_fl(q3, -1.f / 4.f);
+	sub_v4_v4v4(q3, q1Log, q2Log);
+	mul_v4_fl(q3, 1.f / 4.f);
 
 	float q3Exp[4];
 	exp_qt_qt(q3Exp, q3);
@@ -819,16 +821,18 @@ void interp_qt_qtqtqtqt(float result[4], const float quat1[4], const float quat2
 						const float quat3[4], const float quat4[4], const float t)
 {
 	const float* quats_in[4] = {quat1, quat2, quat3, quat4};
-	float quats_shortened[3][4], cosom;
+	float quats_shortened[4][4], cosom;
 
 	BLI_ASSERT_UNIT_QUAT(quat1);
 	BLI_ASSERT_UNIT_QUAT(quat2);
 	BLI_ASSERT_UNIT_QUAT(quat3);
 	BLI_ASSERT_UNIT_QUAT(quat4);
 
+	copy_qt_qt(quats_shortened[0], quats_in[0]);
+
 	/* negate all 'long' quaternion interpolations */
-	for (int i = 0; i < 3; ++i) {
-		cosom = dot_qtqt(quats_in[i], quats_in[i + 1]);
+	for (int i = 1; i < 4; ++i) {
+		cosom = dot_qtqt(quats_shortened[i - 1], quats_in[i]);
 
 		/* rotate around shortest angle */
 		if (cosom < 0.0f)
@@ -841,7 +845,7 @@ void interp_qt_qtqtqtqt(float result[4], const float quat1[4], const float quat2
 	calc_quadrangle(q1, quats_shortened[0], quats_shortened[1], quats_shortened[2]);
 
 	float q2[4];
-	calc_quadrangle(q2, quats_shortened[1], quats_shortened[2], quats_in[3]);
+	calc_quadrangle(q2, quats_shortened[1], quats_shortened[2], quats_shortened[3]);
 
 	float q3[4];
 	interp_qt_qtqt_no_flip(q3, quats_shortened[1], quats_shortened[2], t);

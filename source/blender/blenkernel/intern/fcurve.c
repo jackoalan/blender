@@ -2741,11 +2741,21 @@ static void find_fcurve_interp_qt_times_keyframes(float interp[4], FCurve *fcu, 
 
 		if (prevbezt->vec[1][0] > interp[1]) {
 			interp[0] = interp[1];
+			if (prevbezt != bezts) {
+				float check0 = (prevbezt - 1)->vec[1][0];
+				if (check0 > interp[0])
+					interp[0] = check0;
+			}
 			interp[1] = prevbezt->vec[1][0];
 		}
 
 		if (bezt->vec[1][0] < interp[2]) {
 			interp[3] = interp[2];
+			if (bezt != lastbezt) {
+				float check3 = (bezt + 1)->vec[1][0];
+				if (check3 < interp[3])
+					interp[3] = check3;
+			}
 			interp[2] = bezt->vec[1][0];
 		}
 	}

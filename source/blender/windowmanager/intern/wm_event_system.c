@@ -329,7 +329,7 @@ void wm_event_do_notifiers(bContext *C)
 						RNA_id_pointer_create(note->reference, &id_ptr);
 						if (id_ptr.type == &RNA_Object) {
 							struct Object *ob = id_ptr.data;
-							BKE_animsys_invalidate_object_quat_interp_cache(ob);
+							BKE_animsys_invalidate_object_quat_interp_caches(ob);
 						}
 					}
 				}

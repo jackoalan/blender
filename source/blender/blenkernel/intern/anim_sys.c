@@ -2891,7 +2891,7 @@ static QuaternionInterpStripCache *lookup_quat_interp_strip_cache(QuaternionInte
 	if (strip) {
 		if (!cache->strip_caches)
 			cache->strip_caches = BLI_ghash_new(BLI_ghashutil_inthash_p, BLI_ghashutil_intcmp,
-												"(NlaStrip *, QuaternionInterpStripCache)");
+												"GHash<NlaStrip.name, QuaternionInterpStripCache>");
 		uintptr_t hash = BLI_ghashutil_strhash_p(strip->name);
 		QuaternionInterpStripCache* ret = BLI_ghash_lookup(cache->strip_caches, (void *)hash);
 		if (!ret) {
@@ -3067,7 +3067,7 @@ static void animsys_update_action_interp_qt_cache(QuaternionInterpUpdateContext 
 
 		/* calculate strip-relative interpolant */
 		float t;
-		if (fabsf(times[2] - times[1]) < 0.0001)
+		if (fabsf(times[2] - times[1]) < 0.0001f)
 			t = 0.f;
 		else
 			t = (ctime - times[1]) / (times[2] - times[1]);
@@ -3090,10 +3090,12 @@ static void animsys_update_action_interp_qt_cache(QuaternionInterpUpdateContext 
 
 		/* cache is valid at this point */
 		strip_cache->eval_ctime = ctime;
-		strip_cache->quats[0].ctime = times[0];
 		strip_cache->quats[1].ctime = times[1];
 		strip_cache->quats[2].ctime = times[2];
-		strip_cache->quats[3].ctime = times[3];
+		if (context->four_quats) {
+			strip_cache->quats[0].ctime = times[0];
+			strip_cache->quats[3].ctime = times[3];
+		}
 
 		/* if interpolating an NlaStrip, slerp with identity to apply influence */
 		if (nes) {
@@ -3453,7 +3455,7 @@ void BKE_animsys_invalidate_quat_interp_cache(QuaternionInterpCache *quat_cache)
 /* Initialize contained quaternion interpolation caches as invalid,
  * including PoseChannel caches for Armatures
  */
-void BKE_animsys_invalidate_object_quat_interp_cache(Object *ob)
+void BKE_animsys_invalidate_object_quat_interp_caches(Object *ob)
 {
 	/* invalidate object interpolation cache */
 	if (ob->quat_cache)

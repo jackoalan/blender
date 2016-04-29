@@ -1496,25 +1496,51 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 	if (starttime == FLT_MAX || endtime == -FLT_MAX)
 		return;
 
-	/* iterate each piecewise interpolation region */
-	for (float rt = starttime; rt < endtime;) {
+	/* gather all interpolation region times before inserting any keyframes */
+	struct RegionTimes {
+		struct RegionTimes *next, *prev;
+		float times[4];
+	};
+	ListBase region_times = {NULL, NULL};
 
-		float interp[4] = {-FLT_MAX, -FLT_MAX, FLT_MAX, FLT_MAX};
-		float quats[4][4] = {{0}};
+	/* iterate each piecewise interpolation region and gather times */
+	for (float rt = starttime; rt < endtime;) {
+		struct RegionTimes *interp = MEM_callocN(sizeof(struct RegionTimes), "RegionTimes");
+		interp->times[0] = -FLT_MAX;
+		interp->times[1] = -FLT_MAX;
+		interp->times[2] = FLT_MAX;
+		interp->times[3] = FLT_MAX;
 
 		/* locate nearest times in this interpolation region */
 		for (int c = 0; c <= 3; ++c) {
 			if (found_curves[c] == NULL)
 				continue;
-			find_fcurve_interp_qt_times(interp, found_curves[c], rt);
+			find_fcurve_interp_qt_times(interp->times, found_curves[c], rt);
 		}
 
 		/* ensure evaluation region is complete */
-		if (interp[1] == -FLT_MAX || interp[2] == FLT_MAX || interp[1] == interp[2]) {
-			if (interp[2] != FLT_MAX)
-				rt = nearbyintf(interp[2]) + 1.f;
+		if (interp->times[1] == -FLT_MAX || interp->times[2] == FLT_MAX ||
+			interp->times[1] == interp->times[2]) {
+			if (interp->times[2] != FLT_MAX)
+				rt = nearbyintf(interp->times[2]) + 1.f;
+			MEM_freeN(interp);
 			continue;
 		}
+
+		/* region good, add to list */
+		BLI_addtail(&region_times, interp);
+
+		/* next interpolation region */
+		rt = nearbyintf(interp->times[2]) + 1.f;
+	}
+
+	/* no changes to be made if list is empty */
+	if (BLI_listbase_is_empty(&region_times))
+		return;
+
+	/* iterate each piecewise interpolation region and insert keyframes */
+	for (struct RegionTimes *interp = region_times.first; interp; interp = interp->next) {
+		float quats[4][4] = {{0}};
 
 		/* evaluate interpolation points */
 		if (rotmode == ROT_MODE_QUAT_SLERP) {
@@ -1522,27 +1548,27 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 				for (int c = 0; c <= 3; ++c) {
 					if (found_curves[c] == NULL)
 						continue;
-					quats[i][c] = evaluate_fcurve(found_curves[c], interp[i]);
+					quats[i][c] = evaluate_fcurve(found_curves[c], interp->times[i]);
 				}
 			}
 		}
 		else if (rotmode == ROT_MODE_QUAT_SQUAD) {
-			if (interp[0] == -FLT_MAX)
-				interp[0] = interp[1];
-			if (interp[3] == FLT_MAX)
-				interp[3] = interp[2];
+			if (interp->times[0] == -FLT_MAX)
+				interp->times[0] = interp->times[1];
+			if (interp->times[3] == FLT_MAX)
+				interp->times[3] = interp->times[2];
 			for (int i = 0; i <= 3; ++i) {
 				for (int c = 0; c <= 3; ++c) {
 					if (found_curves[c] == NULL)
 						continue;
-					quats[i][c] = evaluate_fcurve(found_curves[c], interp[i]);
+					quats[i][c] = evaluate_fcurve(found_curves[c], interp->times[i]);
 				}
 			}
 		}
 
 		/* interpolate */
-		for (float t = nearbyintf(interp[1]) + 1.f; t < interp[2]; ++t) {
-			float tn = (t - interp[1]) / (interp[2] - interp[1]);
+		for (float t = nearbyintf(interp->times[1]) + 1.f; t < interp->times[2]; ++t) {
+			float tn = (t - interp->times[1]) / (interp->times[2] - interp->times[1]);
 
 			float quat[4];
 			if (rotmode == ROT_MODE_QUAT_SLERP)
@@ -1557,10 +1583,10 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 								   BEZT_KEYTYPE_BREAKDOWN, INSERTKEY_NEEDED);
 			}
 		}
-
-		/* next interpolation region */
-		rt = nearbyintf(interp[2]) + 1.f;
 	}
+
+	/* clean up */
+	BLI_freelistN(&region_times);
 
 	/* update graph */
 	for (int c = 0; c <= 3; ++c) {

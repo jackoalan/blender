@@ -1918,6 +1918,7 @@ void BKE_pchan_to_mat4(struct Scene* scene, Object *ob, bPoseChannel *pchan, flo
 		/* slerp - direct spherical interpolation */
 		float quat[4];
 
+		/* only perform interpolation on frame updates (so user may freely edit/key) */
 		if (scene && (ob->recalc & (OB_RECALC_TIME|OB_RECALC_DATA)) == OB_RECALC_TIME) {
 			/* scene-time-sensitive quaternion interpolation */
 			float ctime = BKE_scene_frame_get(scene);
@@ -1936,6 +1937,7 @@ void BKE_pchan_to_mat4(struct Scene* scene, Object *ob, bPoseChannel *pchan, flo
 		/* squad - direct spherical-quadrangle interpolation */
 		float quat[4];
 
+		/* only perform interpolation on frame updates (so user may freely edit/key) */
 		if (scene && (ob->recalc & (OB_RECALC_TIME|OB_RECALC_DATA)) == OB_RECALC_TIME) {
 			/* scene-time-sensitive quaternion interpolation */
 			float ctime = BKE_scene_frame_get(scene);

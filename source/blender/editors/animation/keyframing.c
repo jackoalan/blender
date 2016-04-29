@@ -285,7 +285,7 @@ void update_autoflags_fcurve(FCurve *fcu, bContext *C, ReportList *reports, Poin
 	
 	if (old_flag != fcu->flag) {
 		/* Same as if keyframes had been changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	}
 }
 
@@ -1369,7 +1369,7 @@ static int insert_key_exec(bContext *C, wmOperator *op)
 			BKE_reportf(op->reports, RPT_INFO, "Successfully added %d keyframes for keying set '%s'", success, ks->name);
 		
 		/* send notifiers that keyframes have been changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	}
 	else
 		BKE_report(op->reports, RPT_WARNING, "Keying set failed to insert any keyframes");
@@ -1521,7 +1521,7 @@ static int delete_key_exec(bContext *C, wmOperator *op)
 			BKE_reportf(op->reports, RPT_INFO, "Successfully removed %d keyframes for keying set '%s'", success, ks->name);
 		
 		/* send notifiers that keyframes have been changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, CTX_data_active_object(C));
 	}
 	else
 		BKE_report(op->reports, RPT_WARNING, "Keying set failed to remove any keyframes");
@@ -1825,7 +1825,7 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 		UI_context_update_anim_flag(C);
 		
 		/* send notifiers that keyframes have been changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	}
 	
 	return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
@@ -1926,7 +1926,7 @@ static int delete_key_button_exec(bContext *C, wmOperator *op)
 		UI_context_update_anim_flag(C);
 		
 		/* send notifiers that keyframes have been changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, CTX_data_active_object(C));
 	}
 	
 	return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
@@ -1990,7 +1990,7 @@ static int clear_key_button_exec(bContext *C, wmOperator *op)
 		UI_context_update_anim_flag(C);
 		
 		/* send notifiers that keyframes have been changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, CTX_data_active_object(C));
 	}
 
 	return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;

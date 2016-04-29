@@ -239,7 +239,7 @@ void ui_but_anim_autokey(bContext *C, uiBut *but, Scene *scene, float cfra)
 			UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 			
 			insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, 0);
-			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 		}
 	}
 	else if (driven) {
@@ -256,7 +256,7 @@ void ui_but_anim_autokey(bContext *C, uiBut *but, Scene *scene, float cfra)
 			UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 			
 			insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, INSERTKEY_DRIVER);
-			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 		}
 	}
 	else {
@@ -277,7 +277,7 @@ void ui_but_anim_autokey(bContext *C, uiBut *but, Scene *scene, float cfra)
 			insert_keyframe(reports, id, action, ((fcu->grp) ? (fcu->grp->name) : (NULL)),
 			                fcu->rna_path, but->rnaindex, cfra, ts->keyframe_type, flag);
 			
-			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 		}
 	}
 }

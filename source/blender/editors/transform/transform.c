@@ -584,11 +584,11 @@ static void viewRedrawForce(const bContext *C, TransInfo *t)
 	}
 	else if (t->spacetype == SPACE_ACTION) {
 		//SpaceAction *saction = (SpaceAction *)t->sa->spacedata.first;
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	}
 	else if (t->spacetype == SPACE_IPO) {
 		//SpaceIpo *sipo = (SpaceIpo *)t->sa->spacedata.first;
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	}
 	else if (t->spacetype == SPACE_NLA) {
 		WM_event_add_notifier(C, NC_ANIMATION | ND_NLA | NA_EDITED, NULL);
@@ -643,7 +643,7 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
 	if (t->spacetype == SPACE_VIEW3D) {
 		/* if autokeying is enabled, send notifiers that keyframes were added */
 		if (IS_AUTOKEY_ON(t->scene))
-			WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+			WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 
 		/* redraw UV editor */
 		if (ELEM(t->mode, TFM_VERT_SLIDE, TFM_EDGE_SLIDE) &&

@@ -524,7 +524,7 @@ static void gp_stroke_path_animation(bContext *C, ReportList *reports, Curve *cu
 		printf("\n\n");
 	}
 	
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	/* send updates */
 	DAG_id_tag_update(&cu->id, 0);

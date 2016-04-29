@@ -1049,7 +1049,7 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 		}
 		
 		/* send notifiers for updates (this doesn't require context to work!) */
-		WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+		WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	}
 	
 	/* return the number of channels successfully affected */

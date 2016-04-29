@@ -3450,6 +3450,24 @@ void BKE_animsys_invalidate_quat_interp_cache(QuaternionInterpCache *quat_cache)
 	}
 }
 
+/* Initialize contained quaternion interpolation caches as invalid,
+ * including PoseChannel caches for Armatures
+ */
+void BKE_animsys_invalidate_object_quat_interp_cache(Object *ob)
+{
+	/* invalidate object interpolation cache */
+	if (ob->quat_cache)
+		BKE_animsys_invalidate_quat_interp_cache(ob->quat_cache);
+
+	if (ob->type == OB_ARMATURE) {
+		/* invalidate pose interpolation caches */
+		bPoseChannel *pchan;
+		for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next)
+			if (pchan->quat_cache)
+				BKE_animsys_invalidate_quat_interp_cache(pchan->quat_cache);
+	}
+}
+
 /* Free entire interpolation cache, including itself */
 void BKE_animsys_free_quat_interp_cache(QuaternionInterpCache *quat_cache)
 {

@@ -629,7 +629,7 @@ static int actkeys_paste_exec(bContext *C, wmOperator *op)
 	}
 
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -782,7 +782,7 @@ static int actkeys_insertkey_exec(bContext *C, wmOperator *op)
 	}
 
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -853,7 +853,7 @@ static int actkeys_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 	duplicate_action_keys(&ac);
 
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -940,7 +940,7 @@ static int actkeys_delete_exec(bContext *C, wmOperator *UNUSED(op))
 		return OPERATOR_CANCELLED;
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1009,7 +1009,7 @@ static int actkeys_clean_exec(bContext *C, wmOperator *op)
 	clean_action_keys(&ac, thresh, clean_chan);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1077,7 +1077,7 @@ static int actkeys_sample_exec(bContext *C, wmOperator *op)
 	sample_action_keys(&ac);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1629,7 +1629,7 @@ static int actkeys_snap_exec(bContext *C, wmOperator *op)
 	snap_action_keys(&ac, mode);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1743,7 +1743,7 @@ static int actkeys_mirror_exec(bContext *C, wmOperator *op)
 	mirror_action_keys(&ac, mode);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }

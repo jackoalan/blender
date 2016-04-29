@@ -3192,20 +3192,6 @@ void BKE_object_handle_update_ex(EvaluationContext *eval_ctx,
 			}
 		}
 
-		/* invalidate quaternion interpolation cache */
-		if (ob->adt && (ob->adt->recalc & ADT_RECALC_ANIM)) {
-			if (ob->quat_cache)
-				BKE_animsys_invalidate_quat_interp_cache(ob->quat_cache);
-
-			if (ob->type == OB_ARMATURE) {
-				/* invalidate quaternion interpolation cache for poses */
-				bPoseChannel *pchan;
-				for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next)
-					if (pchan->quat_cache)
-						BKE_animsys_invalidate_quat_interp_cache(pchan->quat_cache);
-			}
-		}
-
 		/* XXX new animsys warning: depsgraph tag OB_RECALC_DATA should not skip drivers, 
 		 * which is only in BKE_object_where_is_calc now */
 		/* XXX: should this case be OB_RECALC_OB instead? */

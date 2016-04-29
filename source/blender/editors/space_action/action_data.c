@@ -270,7 +270,7 @@ static int action_new_exec(bContext *C, wmOperator *UNUSED(op))
 	}
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }

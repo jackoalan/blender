@@ -61,7 +61,6 @@
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_nla.h"
-#include "BKE_scene.h"
 #include "BKE_context.h"
 #include "BKE_report.h"
 
@@ -641,7 +640,7 @@ static int graphkeys_insertkey_exec(bContext *C, wmOperator *op)
 	insert_graph_keys(&ac, mode);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -734,7 +733,7 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 	MEM_freeN(ale);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	/* done */
 	return OPERATOR_FINISHED;
@@ -896,7 +895,7 @@ static int graphkeys_paste_exec(bContext *C, wmOperator *op)
 	}
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -962,7 +961,7 @@ static int graphkeys_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 	duplicate_graph_keys(&ac);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1043,7 +1042,7 @@ static int graphkeys_delete_exec(bContext *C, wmOperator *UNUSED(op))
 		return OPERATOR_CANCELLED;
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_REMOVED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1106,7 +1105,7 @@ static int graphkeys_clean_exec(bContext *C, wmOperator *op)
 	clean_graph_keys(&ac, thresh, clean_chan);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1189,7 +1188,7 @@ static int graphkeys_bake_exec(bContext *C, wmOperator *UNUSED(op))
 	
 	/* set notifier that keyframes have changed */
 	// NOTE: some distinction between order/number of keyframes and type should be made?
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1316,7 +1315,7 @@ static int graphkeys_sound_bake_exec(bContext *C, wmOperator *op)
 	ANIM_animdata_freelist(&anim_data);
 
 	/* set notifier that 'keyframes' have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 
 	return OPERATOR_FINISHED;
 }
@@ -1426,7 +1425,7 @@ static int graphkeys_sample_exec(bContext *C, wmOperator *UNUSED(op))
 	sample_graph_keys(&ac);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -1641,7 +1640,7 @@ static int graphquats_sample_exec(bContext *C, wmOperator *UNUSED(op))
 	sample_graph_quats(&ac);
 
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 
 	return OPERATOR_FINISHED;
 }
@@ -2229,7 +2228,7 @@ static int graphkeys_euler_filter_exec(bContext *C, wmOperator *op)
 		}
 		
 		/* set notifier that keyframes have changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 		
 		/* done at last */
 		return OPERATOR_FINISHED;
@@ -2454,7 +2453,7 @@ static int graphkeys_snap_exec(bContext *C, wmOperator *op)
 	snap_graph_keys(&ac, mode);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -2591,7 +2590,7 @@ static int graphkeys_mirror_exec(bContext *C, wmOperator *op)
 	mirror_graph_keys(&ac, mode);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -2647,7 +2646,7 @@ static int graphkeys_smooth_exec(bContext *C, wmOperator *UNUSED(op))
 	ANIM_animdata_freelist(&anim_data);
 	
 	/* set notifier that keyframes have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -2748,7 +2747,7 @@ static int graph_fmodifier_add_exec(bContext *C, wmOperator *op)
 	ANIM_animdata_freelist(&anim_data);
 	
 	/* set notifier that things have changed */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 	
 	return OPERATOR_FINISHED;
 }
@@ -2884,7 +2883,7 @@ static int graph_fmodifier_paste_exec(bContext *C, wmOperator *op)
 	/* successful or not? */
 	if (ok) {
 		/* set notifier that keyframes have changed */
-		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 		
 		return OPERATOR_FINISHED;
 	}

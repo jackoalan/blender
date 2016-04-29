@@ -352,7 +352,7 @@ static int poselib_sanitize_exec(bContext *C, wmOperator *op)
 	/* send notifiers for this - using keyframe editing notifiers, since action 
 	 * may be being shown in anim editors as active action 
 	 */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, ob);
 	
 	return OPERATOR_FINISHED;
 }
@@ -614,7 +614,7 @@ static int poselib_remove_exec(bContext *C, wmOperator *op)
 	/* send notifiers for this - using keyframe editing notifiers, since action 
 	 * may be being shown in anim editors as active action 
 	 */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, ob);
 	
 	/* done */
 	return OPERATOR_FINISHED;
@@ -702,7 +702,7 @@ static int poselib_rename_exec(bContext *C, wmOperator *op)
 	/* send notifiers for this - using keyframe editing notifiers, since action 
 	 * may be being shown in anim editors as active action 
 	 */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, ob);
 	
 	/* done */
 	return OPERATOR_FINISHED;
@@ -978,7 +978,7 @@ static void poselib_keytag_pose(bContext *C, Scene *scene, tPoseLib_PreviewData 
 	}
 	
 	/* send notifiers for this */
-	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, CTX_data_active_object(C));
 }
 
 /* Apply the relevant changes to the pose */

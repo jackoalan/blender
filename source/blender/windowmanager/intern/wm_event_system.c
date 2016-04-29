@@ -50,6 +50,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
+#include "BKE_animsys.h"
 #include "BKE_context.h"
 #include "BKE_idprop.h"
 #include "BKE_global.h"
@@ -318,6 +319,19 @@ void wm_event_do_notifiers(bContext *C)
 				if (note->category == NC_SCENE) {
 					if (note->data == ND_FRAME)
 						do_anim = true;
+				}
+				else if (note->category == NC_ANIMATION && note->data == ND_KEYFRAME) {
+					/* added for quaternion interpolation
+					 * ensures changes via keyframing forces regeneration of quaternions
+					 */
+					if (note->reference) {
+						PointerRNA id_ptr;
+						RNA_id_pointer_create(note->reference, &id_ptr);
+						if (id_ptr.type == &RNA_Object) {
+							struct Object *ob = id_ptr.data;
+							BKE_animsys_invalidate_object_quat_interp_cache(ob);
+						}
+					}
 				}
 			}
 			if (ELEM(note->category, NC_SCENE, NC_OBJECT, NC_GEOM, NC_WM)) {

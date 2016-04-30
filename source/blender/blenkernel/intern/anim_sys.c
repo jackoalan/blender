@@ -3445,10 +3445,12 @@ static void animsys_update_interp_qt_cache(QuaternionInterpCache *quat_cache, Ob
 void BKE_animsys_invalidate_quat_interp_cache(QuaternionInterpCache *quat_cache)
 {
 	invalidate_quat_interp_strip_cache(&quat_cache->main_cache);
+
 	if (quat_cache->strip_caches) {
 		/* clear hashmap and assume current size will be attained in the next cycle */
-		BLI_ghash_clear_ex(quat_cache->strip_caches, NULL, MEM_freeN,
-						   BLI_ghash_size(quat_cache->strip_caches));
+		unsigned int existing_size = BLI_ghash_size(quat_cache->strip_caches);
+		if (existing_size)
+			BLI_ghash_clear_ex(quat_cache->strip_caches, NULL, MEM_freeN, existing_size);
 	}
 }
 

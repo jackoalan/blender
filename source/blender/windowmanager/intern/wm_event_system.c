@@ -320,23 +320,23 @@ void wm_event_do_notifiers(bContext *C)
 					if (note->data == ND_FRAME)
 						do_anim = true;
 				}
-				else if (note->category == NC_ANIMATION && note->data == ND_KEYFRAME) {
-					/* added for quaternion interpolation
-					 * ensures changes via keyframing forces regeneration of quaternions
-					 */
-					if (note->reference) {
-						PointerRNA id_ptr;
-						RNA_id_pointer_create(note->reference, &id_ptr);
-						if (id_ptr.type == &RNA_Object) {
-							struct Object *ob = id_ptr.data;
-							BKE_animsys_invalidate_object_quat_interp_caches(ob);
-						}
-					}
-				}
 			}
 			if (ELEM(note->category, NC_SCENE, NC_OBJECT, NC_GEOM, NC_WM)) {
 				ED_info_stats_clear(win->screen->scene);
 				WM_event_add_notifier(C, NC_SPACE | ND_SPACE_INFO, NULL);
+			}
+			else if (note->category == NC_ANIMATION && note->data == ND_KEYFRAME) {
+				/* added for quaternion interpolation
+				 * ensures changes via keyframing forces regeneration of quaternions
+				 */
+				if (note->reference) {
+					PointerRNA id_ptr;
+					RNA_id_pointer_create(note->reference, &id_ptr);
+					if (id_ptr.type == &RNA_Object) {
+						struct Object *ob = id_ptr.data;
+						BKE_animsys_invalidate_object_quat_interp_caches(ob);
+					}
+				}
 			}
 		}
 		if (do_anim) {

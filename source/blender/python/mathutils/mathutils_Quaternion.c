@@ -358,19 +358,19 @@ static PyObject *Quaternion_squad(QuaternionObject *self, PyObject *args)
 		return NULL;
 
 	if (mathutils_array_parse(tquat0, QUAT_SIZE, QUAT_SIZE, quat0,
-							  "Quaternion.squad(other), invalid 'quat0' arg") == -1)
+							  "Quaternion.squad(quat0, quat2, quat3), invalid 'quat0' arg") == -1)
 	{
 		return NULL;
 	}
 
 	if (mathutils_array_parse(tquat2, QUAT_SIZE, QUAT_SIZE, quat2,
-							  "Quaternion.squad(other), invalid 'quat2' arg") == -1)
+							  "Quaternion.squad(quat0, quat2, quat3), invalid 'quat2' arg") == -1)
 	{
 		return NULL;
 	}
 
 	if (mathutils_array_parse(tquat3, QUAT_SIZE, QUAT_SIZE, quat3,
-							  "Quaternion.squad(other), invalid 'quat3' arg") == -1)
+							  "Quaternion.squad(quat0, quat2, quat3), invalid 'quat3' arg") == -1)
 	{
 		return NULL;
 	}

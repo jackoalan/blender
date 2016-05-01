@@ -211,6 +211,11 @@ void BKE_animsys_invalidate_quat_interp_cache(struct QuaternionInterpCache *quat
  */
 void BKE_animsys_invalidate_object_quat_interp_caches(struct Object *ob);
 
+/* Initialize contained quaternion interpolation caches as invalid
+ * for all objects using specified action within its AnimData
+ */
+void BKE_animsys_invalidate_action_quat_interp_caches(struct Main *main, struct bAction *act);
+
 /* Free entire interpolation cache, including itself */
 void BKE_animsys_free_quat_interp_cache(struct QuaternionInterpCache *quat_cache);
 

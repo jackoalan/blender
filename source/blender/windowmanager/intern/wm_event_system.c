@@ -36,6 +36,8 @@
 #include <string.h>
 
 #include "DNA_listBase.h"
+#include "DNA_anim_types.h"
+#include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
@@ -333,8 +335,13 @@ void wm_event_do_notifiers(bContext *C)
 					PointerRNA id_ptr;
 					RNA_id_pointer_create(note->reference, &id_ptr);
 					if (id_ptr.type == &RNA_Object) {
-						struct Object *ob = id_ptr.data;
-						BKE_animsys_invalidate_object_quat_interp_caches(ob);
+						Object *ob = id_ptr.data;
+						if (ob->adt && ob->adt->action) {
+							/* invalidate all action-using objects' caches */
+							BKE_animsys_invalidate_action_quat_interp_caches(CTX_data_main(C), ob->adt->action);
+						}
+						else /* otherwise just invalidate this object */
+							BKE_animsys_invalidate_object_quat_interp_caches(ob);
 					}
 				}
 			}

@@ -3472,6 +3472,47 @@ void BKE_animsys_invalidate_object_quat_interp_caches(Object *ob)
 	}
 }
 
+/* Determines if action occurs anywhere within supplied NlaStrip */
+static bool action_in_nlastrip(NlaStrip *strip, bAction *act)
+{
+	if (strip->type == NLASTRIP_TYPE_META) {
+		for (NlaStrip *child = strip->strips.first; child; child = child->next) {
+			if (action_in_nlastrip(child, act))
+				return true;
+		}
+	}
+	else if (strip->type == NLASTRIP_TYPE_CLIP) {
+		if (strip->act == act)
+			return true;
+	}
+	return false;
+}
+
+/* Determines if action occurs anywhere within supplied AnimData */
+static bool action_in_animdata(AnimData *adt, bAction *act)
+{
+	if (adt->action == act)
+		return true;
+	for (NlaTrack *track = adt->nla_tracks.first; track; track = track->next) {
+		for (NlaStrip *strip = track->strips.first; strip; strip = strip->next) {
+			if (action_in_nlastrip(strip, act))
+				return true;
+		}
+	}
+	return false;
+}
+
+/* Initialize contained quaternion interpolation caches as invalid
+ * for all objects using specified action within its AnimData
+ */
+void BKE_animsys_invalidate_action_quat_interp_caches(Main *main, bAction *act)
+{
+	for (Object *obj = main->object.first; obj; obj = obj->id.next) {
+		if (obj->adt && action_in_animdata(obj->adt, act))
+			BKE_animsys_invalidate_object_quat_interp_caches(obj);
+	}
+}
+
 /* Free entire interpolation cache, including itself */
 void BKE_animsys_free_quat_interp_cache(QuaternionInterpCache *quat_cache)
 {

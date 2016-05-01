@@ -1522,7 +1522,7 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 		if (interp->times[1] == -FLT_MAX || interp->times[2] == FLT_MAX ||
 			interp->times[1] == interp->times[2]) {
 			if (interp->times[2] != FLT_MAX)
-				rt = nearbyintf(interp->times[2]) + 1.f;
+				rt = floorf(interp->times[2]) + 1.f;
 			MEM_freeN(interp);
 			continue;
 		}
@@ -1531,7 +1531,7 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 		BLI_addtail(&region_times, interp);
 
 		/* next interpolation region */
-		rt = nearbyintf(interp->times[2]) + 1.f;
+		rt = floorf(interp->times[2]) + 1.f;
 	}
 
 	/* no changes to be made if list is empty */
@@ -1567,7 +1567,7 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 		}
 
 		/* interpolate */
-		for (float t = nearbyintf(interp->times[1]) + 1.f; t < interp->times[2]; ++t) {
+		for (float t = floorf(interp->times[1]) + 1.f; t < interp->times[2]; ++t) {
 			float tn = (t - interp->times[1]) / (interp->times[2] - interp->times[1]);
 
 			float quat[4];

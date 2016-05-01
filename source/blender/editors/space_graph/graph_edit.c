@@ -1550,6 +1550,7 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 						continue;
 					quats[i][c] = evaluate_fcurve(found_curves[c], interp->times[i]);
 				}
+				normalize_qt(quats[i]);
 			}
 		}
 		else if (rotmode == ROT_MODE_QUAT_SQUAD) {
@@ -1563,6 +1564,7 @@ static void sample_graph_quat_channels(eRotationModes rotmode, bAnimListElem *al
 						continue;
 					quats[i][c] = evaluate_fcurve(found_curves[c], interp->times[i]);
 				}
+				normalize_qt(quats[i]);
 			}
 		}
 
